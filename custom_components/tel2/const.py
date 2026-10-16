@@ -56,9 +56,19 @@ PERSONAL_PREF_FIELDS: Final = frozenset(
     }
 )
 
-# Substrings of Tel2 error messages that mean the token or login was refused.
-# Empty until filled from the captured error fixtures.
-AUTH_ERROR_PATTERNS: Final[tuple[str, ...]] = ()
+# Lower-case substrings of Tel2 error messages that mean the token or login was refused.
+# Provisional until the live capture confirms Tel2's wording.
+AUTH_ERROR_PATTERNS: Final[tuple[str, ...]] = (
+    "invalid login",
+    "invalid token",
+    "login not specified",
+    "token not specified",
+    "invalid password",
+    "token expired",
+    "not authenticated",
+    "unauthorised",
+    "unauthorized",
+)
 
 # The API docs show pref values as "1"/"0" strings; confirm against the live capture.
 PREF_VALUE_ON: Final = "1"

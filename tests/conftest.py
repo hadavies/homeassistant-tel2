@@ -7,9 +7,11 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.syrupy import HomeAssistantSnapshotExtension
+from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 from syrupy.assertion import SnapshotAssertion
 
 from custom_components.tel2.const import DOMAIN
+from tests.fake_tel2 import FakeTel2Api
 from tests.fixture_loader import TEST_ENTRY_ID
 
 
@@ -46,3 +48,9 @@ def mock_setup_entry() -> Generator[AsyncMock]:
         "custom_components.tel2.async_setup_entry", return_value=True
     ) as mock_setup:
         yield mock_setup
+
+
+@pytest.fixture
+def fake_tel2(aioclient_mock: AiohttpClientMocker) -> FakeTel2Api:
+    """Return a fake Tel2 API serving fixtures on the mocked HTTP client."""
+    return FakeTel2Api(aioclient_mock)

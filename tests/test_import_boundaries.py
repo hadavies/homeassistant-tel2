@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 PACKAGE_DIR = Path(__file__).parent.parent / "custom_components" / "tel2"
-HA_FREE_MODULES = ("const.py", "models.py", "numbering.py")
+HA_FREE_MODULES = ("const.py", "models.py", "numbering.py", "api.py")
 
 
 def _imported_modules(tree: ast.AST) -> set[str]:
