@@ -1,0 +1,213 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect your Tel2 account",
+        "description": "Sign in with a Tel2 portal login",
+        "data": {
+          "login": "Portal login",
+          "password": "Password"
+        },
+        "data_description": {
+          "login": "Create a dedicated login for Home Assistant under Accounts > Logins in the Tel2 portal, with Full access. It keeps your main login out of Home Assistant and you can remove it on its own.",
+          "password": "The password for that portal login"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Sign in to Tel2 again",
+        "description": "Tel2 stopped accepting the saved login. Enter the login and password again for the same Tel2 account.",
+        "data": {
+          "login": "Portal login",
+          "password": "Password"
+        },
+        "data_description": {
+          "login": "The portal login for this Tel2 account",
+          "password": "The password for that portal login"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Tel2 didn't accept that login or password",
+      "cannot_connect": "Can't reach Tel2, check your connection and try again",
+      "insufficient_access": "This login can't use {contexts}. Give it {level} access in the Tel2 portal and try again.",
+      "unknown": "Something unexpected went wrong, check the logs and try again"
+    },
+    "abort": {
+      "already_configured": "This Tel2 account is already set up",
+      "wrong_account": "That login belongs to a different Tel2 account. Use a login for the account that's already set up.",
+      "reauth_successful": "Signed in again, Tel2 is working"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Tel2 options",
+        "data": {
+          "scan_interval": "Line refresh interval (minutes)",
+          "call_events": "Call events"
+        },
+        "data_description": {
+          "scan_interval": "How often to check line status and settings, between 2 and 60 minutes. Account details refresh every 15 minutes regardless.",
+          "call_events": "Have Tel2 send ringing, answered, missed and ended calls to Home Assistant as they happen. Needs Home Assistant reachable from the internet."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "balance": {
+        "name": "Balance"
+      },
+      "available_balance": {
+        "name": "Available balance"
+      },
+      "plan": {
+        "name": "Plan"
+      },
+      "account_status": {
+        "name": "Account status"
+      },
+      "bundle_used": {
+        "name": "Bundle minutes used"
+      },
+      "bundle_total": {
+        "name": "Bundle minutes included"
+      }
+    },
+    "binary_sensor": {
+      "api_connected": {
+        "name": "API connected"
+      },
+      "registered": {
+        "name": "Registered"
+      }
+    },
+    "switch": {
+      "do_not_disturb": {
+        "name": "Do not disturb"
+      },
+      "call_forward_always": {
+        "name": "Forward all calls"
+      },
+      "anonymous_reject": {
+        "name": "Reject anonymous calls"
+      },
+      "call_recording": {
+        "name": "Call recording"
+      }
+    },
+    "text": {
+      "forward_destination": {
+        "name": "Forward destination"
+      }
+    },
+    "button": {
+      "resync_line": {
+        "name": "Resync line"
+      },
+      "reboot_phone": {
+        "name": "Reboot phone"
+      }
+    },
+    "event": {
+      "call": {
+        "name": "Call",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "ringing": "Ringing",
+              "answered": "Answered",
+              "ended": "Ended",
+              "missed": "Missed",
+              "busy": "Busy",
+              "no_answer": "No answer",
+              "rejected": "Rejected",
+              "invalid": "Invalid number",
+              "not_available": "Not available",
+              "blocked": "Blocked"
+            }
+          },
+          "from": {
+            "name": "From"
+          },
+          "to": {
+            "name": "To"
+          },
+          "direction": {
+            "name": "Direction"
+          },
+          "call_id": {
+            "name": "Call ID"
+          },
+          "start_time": {
+            "name": "Start time"
+          },
+          "duration": {
+            "name": "Duration"
+          }
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "set_failed": {
+      "message": "Tel2 didn't apply that change, the setting is unchanged"
+    },
+    "forward_destination_required": {
+      "message": "Set a forward destination before turning on call forwarding"
+    },
+    "invalid_destination": {
+      "message": "That isn't a valid phone number"
+    },
+    "forward_destination_failed": {
+      "message": "Tel2 didn't save the forward destination, it's unchanged"
+    },
+    "secret_pref": {
+      "message": "PINs and security answers can't be set from Home Assistant, change them in the Tel2 portal"
+    },
+    "not_a_line": {
+      "message": "That device isn't a Tel2 number. Pick one of the number devices, not the account."
+    },
+    "tel2_rejected": {
+      "message": "Tel2 rejected the setting: {message}"
+    },
+    "resync_failed": {
+      "message": "Tel2 couldn't resync the line, check a phone is registered to it"
+    },
+    "reboot_failed": {
+      "message": "Tel2 couldn't reboot the phone, check a phone is registered to the line"
+    },
+    "update_cannot_connect": {
+      "message": "Can't reach Tel2, will try again at the next refresh"
+    },
+    "update_tel2_error": {
+      "message": "Tel2 returned an error: {message}"
+    }
+  },
+  "issues": {
+    "call_events_no_public_url": {
+      "title": "Call events need Home Assistant on the internet",
+      "description": "Tel2 sends call events straight to Home Assistant, so it needs an address it can reach from the internet. Either sign in to Home Assistant Cloud, or set an external URL starting with https under Settings > System > Network.\n\nOnce Home Assistant is reachable this clears by itself within about 15 minutes, or reload the Tel2 integration to apply it straight away. Until then the call event entities stay unavailable. Everything else still works."
+    }
+  },
+  "services": {
+    "set_line_setting": {
+      "name": "Set line setting",
+      "description": "Sets any Tel2 line setting on a number, for settings that don't have their own entity. PINs and security answers can't be set.",
+      "fields": {
+        "device_id": {
+          "name": "Number",
+          "description": "The Tel2 number device to change"
+        },
+        "pref": {
+          "name": "Setting",
+          "description": "The Tel2 setting name, for example do_not_disturb_status"
+        },
+        "value": {
+          "name": "Value",
+          "description": "The value to set, in the form Tel2 expects"
+        }
+      }
+    }
+  }
+}
