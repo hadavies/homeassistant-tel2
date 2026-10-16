@@ -1,0 +1,15 @@
+{
+  "Result": "1",
+  "Status": "Success",
+  "Message": "Method Executed Successfully.",
+  "Data": [
+    {
+      "ServiceType": "Voice",
+      "Alias": "Example Plan",
+      "BillingDescription": "Example business voice plan",
+      "Charge": "10.00",
+      "Quantity": "2",
+      "IncludedChannels": "2"
+    }
+  ]
+}

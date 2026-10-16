@@ -1,0 +1,14 @@
+{
+  "Result": "1",
+  "Status": "Success",
+  "Message": "Method Executed Successfully.",
+  "Data": {
+    "Account_Code": "00000000",
+    "CustomerName": "Example Customer",
+    "CompanyName": "Example Ltd",
+    "Email": "user@example.com",
+    "Phone_Number": "01632960001",
+    "Status": "Active",
+    "ServiceType": "Voice"
+  }
+}

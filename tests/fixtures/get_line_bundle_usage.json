@@ -1,0 +1,17 @@
+{
+  "01632960001": {
+    "Result": "1",
+    "Status": "Success",
+    "Message": "Method Executed Successfully.",
+    "Data": {
+      "USED": "37",
+      "TOTAL": "1000"
+    }
+  },
+  "01632960002": {
+    "Result": "0",
+    "Status": "Success",
+    "Message": "No Data Found.",
+    "Data": []
+  }
+}

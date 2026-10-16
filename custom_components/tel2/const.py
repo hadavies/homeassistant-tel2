@@ -37,6 +37,22 @@ SECRET_PREFS: Final = frozenset(
         "remotedialtone_pin",
         "conference_pin",
         "security_answer",
+        "password",
+        "imappassword",
+        "conference_adminpin",
+    }
+)
+
+PERSONAL_PREF_FIELDS: Final = frozenset(
+    {
+        "fullname",
+        "email",
+        "imapuser",
+        "pager",
+        "customer_id",
+        "id",
+        "lastcld",
+        "lastclr",
     }
 )
 
@@ -44,9 +60,9 @@ SECRET_PREFS: Final = frozenset(
 # Empty until filled from the captured error fixtures.
 AUTH_ERROR_PATTERNS: Final[tuple[str, ...]] = ()
 
-# Best guess from the API docs ("on"/"off"); replaced from the captured pref fixture.
-PREF_VALUE_ON: Final = "on"
-PREF_VALUE_OFF: Final = "off"
+# The API docs show pref values as "1"/"0" strings; confirm against the live capture.
+PREF_VALUE_ON: Final = "1"
+PREF_VALUE_OFF: Final = "0"
 
 PREF_DO_NOT_DISTURB: Final = "do_not_disturb_status"
 PREF_FORWARD_ALWAYS: Final = "callforward_always_status"

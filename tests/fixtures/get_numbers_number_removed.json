@@ -1,0 +1,20 @@
+{
+  "Result": "1",
+  "Status": "Success",
+  "Message": "Method Executed Successfully.",
+  "Data": [
+    {
+      "ServiceName": "01632960001",
+      "Alias": "Line 1",
+      "Parameter_4": "Line 1",
+      "ExtensionNumber": "201",
+      "LineEmail": "line1@example.com",
+      "GroupID": "1",
+      "BillingGroup": "Default",
+      "Profile": "Default",
+      "Charge": "5.00",
+      "userid": "1001",
+      "Parameter_1": "fake-sip-password-1"
+    }
+  ]
+}

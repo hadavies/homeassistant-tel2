@@ -1,0 +1,8 @@
+{
+  "state": "ringing",
+  "id": "example-call-0006",
+  "originid": "example-origin-0006",
+  "from": "441632960001",
+  "to": "447700900123",
+  "type": "dialed"
+}

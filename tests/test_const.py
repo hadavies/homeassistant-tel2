@@ -4,6 +4,9 @@ import pytest
 
 from custom_components.tel2.const import (
     CALL_EVENT_TYPES,
+    PERSONAL_PREF_FIELDS,
+    PREF_VALUE_OFF,
+    PREF_VALUE_ON,
     SECRET_PREFS,
     TEL2_IGNORED_STATES,
     TEL2_STATE_MAP,
@@ -49,4 +52,25 @@ def test_secret_prefs() -> None:
         "remotedialtone_pin",
         "conference_pin",
         "security_answer",
+        "password",
+        "imappassword",
+        "conference_adminpin",
     } == SECRET_PREFS
+
+
+def test_personal_pref_fields() -> None:
+    assert {
+        "fullname",
+        "email",
+        "imapuser",
+        "pager",
+        "customer_id",
+        "id",
+        "lastcld",
+        "lastclr",
+    } == PERSONAL_PREF_FIELDS
+    assert not PERSONAL_PREF_FIELDS & SECRET_PREFS
+
+
+def test_pref_values_are_documented_strings() -> None:
+    assert (PREF_VALUE_ON, PREF_VALUE_OFF) == ("1", "0")

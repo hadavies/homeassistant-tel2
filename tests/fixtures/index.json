@@ -1,0 +1,302 @@
+{
+  "files": [
+    {
+      "file": "get_token.json",
+      "action": "Get-Token",
+      "source": "synthetic",
+      "description": "Get-Token success with an obviously fake token."
+    },
+    {
+      "file": "get_customer_details.json",
+      "action": "Get-Customer-Details",
+      "source": "synthetic",
+      "description": "Get-Customer-Details for the fictional two-line account."
+    },
+    {
+      "file": "get_account_balance.json",
+      "action": "Get-Account-Balance",
+      "source": "synthetic",
+      "description": "Get-Account-Balance with a credit balance."
+    },
+    {
+      "file": "get_current_plan_summary.json",
+      "action": "Get-Current-Plan-Summary",
+      "source": "synthetic",
+      "description": "Get-Current-Plan-Summary with one plan row."
+    },
+    {
+      "file": "get_numbers.json",
+      "action": "Get-Numbers",
+      "source": "synthetic",
+      "description": "Get-Numbers for two lines, each with a fake Parameter_1 line password."
+    },
+    {
+      "file": "get_numbers_extension_only.json",
+      "action": "Get-Numbers",
+      "source": "synthetic",
+      "description": "Get-Numbers with two lines plus an extension-only entry (empty ServiceName)."
+    },
+    {
+      "file": "get_numbers_number_added.json",
+      "action": "Get-Numbers",
+      "source": "synthetic",
+      "description": "Get-Numbers after a third number is added to the account."
+    },
+    {
+      "file": "get_numbers_number_removed.json",
+      "action": "Get-Numbers",
+      "source": "synthetic",
+      "description": "Get-Numbers after the second number is removed, leaving one line."
+    },
+    {
+      "file": "get_line_names.json",
+      "action": "Get-Line-Names",
+      "source": "synthetic",
+      "description": "Get-Line-Names for the two lines."
+    },
+    {
+      "file": "get_line_bundle_usage.json",
+      "action": "Get-Line-Bundle-Usage",
+      "keyed_by": "line",
+      "source": "synthetic",
+      "description": "Get-Line-Bundle-Usage keyed by line: line 1 has a bundle, line 2 returns no data."
+    },
+    {
+      "file": "get_subscriber_status.json",
+      "action": "Get-Subscriber-Status",
+      "source": "synthetic",
+      "description": "Get-Subscriber-Status with no lines registered (no data)."
+    },
+    {
+      "file": "get_subscriber_status_registered.json",
+      "action": "Get-Subscriber-Status",
+      "source": "synthetic",
+      "description": "Get-Subscriber-Status with line 1 registered and line 2 not."
+    },
+    {
+      "file": "get_all_pref_summary.json",
+      "action": "Get-All-Pref-Summary",
+      "source": "synthetic",
+      "description": "Get-All-Pref-Summary with every switch pref off, including fake secret and personal fields."
+    },
+    {
+      "file": "get_all_pref_summary_all_on.json",
+      "action": "Get-All-Pref-Summary",
+      "source": "synthetic",
+      "description": "Get-All-Pref-Summary with DND, forward always (with a destination), anonymous reject and recording on."
+    },
+    {
+      "file": "get_all_pref_summary_number_added.json",
+      "action": "Get-All-Pref-Summary",
+      "source": "synthetic",
+      "description": "Get-All-Pref-Summary after a third number is added, every switch pref off."
+    },
+    {
+      "file": "get_webhooks.json",
+      "action": "Get-Webhooks",
+      "source": "synthetic",
+      "description": "Get-Webhooks with no webhooks registered (no data)."
+    },
+    {
+      "file": "get_webhooks_populated.json",
+      "action": "Get-Webhooks",
+      "source": "synthetic",
+      "description": "Get-Webhooks with homeassistant-tel2-tel2_test_entry (TEST_ENTRY_ID tel2_test_entry, X-Tel2-Signature) and one other app; field names guessed from Add-Webhook."
+    },
+    {
+      "file": "error_wrong_password.json",
+      "action": "Get-Token",
+      "source": "synthetic",
+      "description": "Get-Token refused for a wrong password."
+    },
+    {
+      "file": "error_invalid_token.json",
+      "action": "Get-Account-Balance",
+      "source": "synthetic",
+      "description": "Any action refused for an invalid or expired token."
+    },
+    {
+      "file": "error_access_refused_account.json",
+      "action": "Get-Account-Balance",
+      "source": "synthetic",
+      "description": "Account-context action refused for the portal user's access level (non-auth)."
+    },
+    {
+      "file": "error_access_refused_voice.json",
+      "action": "Get-Subscriber-Status",
+      "source": "synthetic",
+      "description": "Voice-context action refused for the portal user's access level (non-auth)."
+    },
+    {
+      "file": "error_access_refused_api.json",
+      "action": "Get-Webhooks",
+      "source": "synthetic",
+      "description": "API-context action refused for the portal user's access level (non-auth)."
+    },
+    {
+      "file": "error_generic.json",
+      "action": "Get-Account-Balance",
+      "source": "synthetic",
+      "description": "Generic non-auth query error."
+    },
+    {
+      "file": "set_pref_value.json",
+      "action": "Set-Pref-Value",
+      "source": "synthetic",
+      "description": "Set-Pref-Value success."
+    },
+    {
+      "file": "set_pref_value_rejected.json",
+      "action": "Set-Pref-Value",
+      "source": "synthetic",
+      "description": "Set-Pref-Value rejected by Tel2."
+    },
+    {
+      "file": "enable_recording.json",
+      "action": "Enable-Recording",
+      "source": "synthetic",
+      "description": "Enable-Recording success."
+    },
+    {
+      "file": "enable_recording_rejected.json",
+      "action": "Enable-Recording",
+      "source": "synthetic",
+      "description": "Enable-Recording rejected by Tel2."
+    },
+    {
+      "file": "disable_recording.json",
+      "action": "Disable-Recording",
+      "source": "synthetic",
+      "description": "Disable-Recording success."
+    },
+    {
+      "file": "disable_recording_rejected.json",
+      "action": "Disable-Recording",
+      "source": "synthetic",
+      "description": "Disable-Recording rejected by Tel2."
+    },
+    {
+      "file": "resync_line.json",
+      "action": "Resync-Line",
+      "source": "synthetic",
+      "description": "Resync-Line success."
+    },
+    {
+      "file": "resync_line_rejected.json",
+      "action": "Resync-Line",
+      "source": "synthetic",
+      "description": "Resync-Line rejected by Tel2."
+    },
+    {
+      "file": "reboot_phone.json",
+      "action": "Reboot-Phone",
+      "source": "synthetic",
+      "description": "Reboot-Phone success."
+    },
+    {
+      "file": "reboot_phone_rejected.json",
+      "action": "Reboot-Phone",
+      "source": "synthetic",
+      "description": "Reboot-Phone rejected by Tel2."
+    },
+    {
+      "file": "add_webhook.json",
+      "action": "Add-Webhook",
+      "source": "synthetic",
+      "description": "Add-Webhook success."
+    },
+    {
+      "file": "add_webhook_rejected.json",
+      "action": "Add-Webhook",
+      "source": "synthetic",
+      "description": "Add-Webhook rejected by Tel2."
+    },
+    {
+      "file": "delete_webhook.json",
+      "action": "Delete-Webhook",
+      "source": "synthetic",
+      "description": "Delete-Webhook success."
+    },
+    {
+      "file": "delete_webhook_rejected.json",
+      "action": "Delete-Webhook",
+      "source": "synthetic",
+      "description": "Delete-Webhook rejected by Tel2."
+    },
+    {
+      "file": "webhook_inbound_ringing.json",
+      "source": "synthetic",
+      "description": "Webhook payload: inbound call, state ringing."
+    },
+    {
+      "file": "webhook_inbound_answered.json",
+      "source": "synthetic",
+      "description": "Webhook payload: inbound call, state answered."
+    },
+    {
+      "file": "webhook_inbound_ended.json",
+      "source": "synthetic",
+      "description": "Webhook payload: inbound call, state ended."
+    },
+    {
+      "file": "webhook_inbound_missed.json",
+      "source": "synthetic",
+      "description": "Webhook payload: inbound call, state missed."
+    },
+    {
+      "file": "webhook_inbound_blocked.json",
+      "source": "synthetic",
+      "description": "Webhook payload: inbound call, state blocked."
+    },
+    {
+      "file": "webhook_outbound_ringing.json",
+      "source": "synthetic",
+      "description": "Webhook payload: outbound call, state ringing."
+    },
+    {
+      "file": "webhook_outbound_answered.json",
+      "source": "synthetic",
+      "description": "Webhook payload: outbound call, state answered."
+    },
+    {
+      "file": "webhook_outbound_ended.json",
+      "source": "synthetic",
+      "description": "Webhook payload: outbound call, state ended."
+    },
+    {
+      "file": "webhook_outbound_busy.json",
+      "source": "synthetic",
+      "description": "Webhook payload: outbound call, state busy."
+    },
+    {
+      "file": "webhook_outbound_noanswer.json",
+      "source": "synthetic",
+      "description": "Webhook payload: outbound call, state noanswer."
+    },
+    {
+      "file": "webhook_outbound_rejected.json",
+      "source": "synthetic",
+      "description": "Webhook payload: outbound call, state rejected."
+    },
+    {
+      "file": "webhook_outbound_invalid.json",
+      "source": "synthetic",
+      "description": "Webhook payload: outbound call, state invalid."
+    },
+    {
+      "file": "webhook_outbound_notavailable.json",
+      "source": "synthetic",
+      "description": "Webhook payload: outbound call, state notavailable."
+    },
+    {
+      "file": "webhook_outbound_blocked.json",
+      "source": "synthetic",
+      "description": "Webhook payload: outbound call, state blocked."
+    },
+    {
+      "file": "webhook_aianalysis.json",
+      "source": "synthetic",
+      "description": "Webhook payload: aianalysis for an inbound call (ignored by the integration)."
+    }
+  ]
+}

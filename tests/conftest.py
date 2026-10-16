@@ -10,6 +10,7 @@ from pytest_homeassistant_custom_component.syrupy import HomeAssistantSnapshotEx
 from syrupy.assertion import SnapshotAssertion
 
 from custom_components.tel2.const import DOMAIN
+from tests.fixture_loader import TEST_ENTRY_ID
 
 
 @pytest.fixture(autouse=True)
@@ -29,6 +30,7 @@ def mock_config_entry_factory() -> Callable[..., MockConfigEntry]:
 
     def _factory(**kwargs: Any) -> MockConfigEntry:
         kwargs.setdefault("domain", DOMAIN)
+        kwargs.setdefault("entry_id", TEST_ENTRY_ID)
         kwargs.setdefault("title", "Tel2")
         kwargs.setdefault("data", {})
         kwargs.setdefault("options", {})

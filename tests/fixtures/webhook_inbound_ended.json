@@ -1,0 +1,11 @@
+{
+  "state": "ended",
+  "id": "example-call-0003",
+  "originid": "example-origin-0003",
+  "from": "447700900123",
+  "to": "441632960001",
+  "type": "received",
+  "start_time": "2026-10-16 09:15:02",
+  "duration": 42,
+  "voiceuri": "https://example.invalid/recordings/example-call-0003.mp3"
+}

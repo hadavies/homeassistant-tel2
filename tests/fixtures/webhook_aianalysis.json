@@ -1,0 +1,11 @@
+{
+  "state": "aianalysis",
+  "id": "example-call-0003",
+  "originid": "example-origin-0003",
+  "from": "447700900123",
+  "to": "441632960001",
+  "type": "received",
+  "aiuri": "https://example.invalid/ai/example-call-0003",
+  "transcript": "Hello, this is an example transcript.",
+  "callsummary": "Example caller asked about opening hours."
+}

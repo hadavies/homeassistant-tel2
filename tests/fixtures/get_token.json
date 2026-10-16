@@ -1,0 +1,8 @@
+{
+  "Result": "1",
+  "Status": "Success",
+  "Message": "Method Executed Successfully.",
+  "Data": {
+    "token": "fake-token-for-tests"
+  }
+}
