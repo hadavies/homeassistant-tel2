@@ -1,0 +1,7 @@
+[tools]
+python = "3.14"
+uv = "0.13.1"
+
+[settings]
+# Older mise releases otherwise pick the free-threaded build, which fails to install.
+python.precompiled_flavor = "install_only_stripped"

@@ -1,0 +1,8 @@
+{
+  "name": "Tel2",
+  "homeassistant": "2026.10.0",
+  "country": ["GB"],
+  "zip_release": true,
+  "filename": "tel2.zip",
+  "render_readme": true
+}
