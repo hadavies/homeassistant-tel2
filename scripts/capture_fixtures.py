@@ -5,6 +5,7 @@ import asyncio
 from collections.abc import Mapping, Sequence
 import getpass
 import json
+import os
 from pathlib import Path
 import secrets
 import sys
@@ -193,8 +194,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="directory to write fixtures to (default: tests/fixtures/captured)",
     )
     args = parser.parse_args(argv)
-    login = getpass.getpass("Tel2 portal login: ").strip()
-    password = getpass.getpass("Tel2 portal password: ")
+    login = (
+        os.environ.get("TEL2_LOGIN") or getpass.getpass("Tel2 portal login: ")
+    ).strip()
+    password = os.environ.get("TEL2_PASSWORD") or getpass.getpass(
+        "Tel2 portal password: "
+    )
     try:
         responses, token = asyncio.run(capture(login, password))
     except (aiohttp.ClientError, TimeoutError) as err:

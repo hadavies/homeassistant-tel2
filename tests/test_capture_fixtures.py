@@ -237,3 +237,25 @@ def test_main_writes_nothing_when_the_leak_check_trips(
     assert "get_account_balance.json.Data.Reference" in str(exc.value.code)
     assert "123456789012" not in str(exc.value.code)
     assert not out.exists()
+
+
+def test_credentials_can_come_from_the_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TEL2_LOGIN", " env-login ")
+    monkeypatch.setenv("TEL2_PASSWORD", "env-password")
+
+    def _no_prompt(*_: object) -> str:
+        raise AssertionError("prompted despite environment credentials")
+
+    monkeypatch.setattr(capture_fixtures.getpass, "getpass", _no_prompt)
+    seen: list[tuple[str, str]] = []
+
+    async def _capture(login: str, password: str) -> Any:
+        seen.append((login, password))
+        raise TimeoutError
+
+    monkeypatch.setattr(capture_fixtures, "capture", _capture)
+    with pytest.raises(SystemExit):
+        capture_fixtures.main(["--out", "unused"])
+    assert seen == [("env-login", "env-password")]

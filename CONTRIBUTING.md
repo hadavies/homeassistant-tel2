@@ -53,6 +53,7 @@ If a test needs a response that isn't there, add a synthetic fixture and an inde
 ```
 
 - It prompts for a Tel2 portal login and password, use a dedicated login rather than your own.
+- To skip the prompts, set `TEL2_LOGIN` and `TEL2_PASSWORD` in the environment. Keep them in a git-ignored file such as `.env`, never in the repo.
 - It only calls read-only actions, nothing on the account is changed.
 - Every response goes through `scripts/anonymise.py` before anything is written.
 - If anything still looks personal after that, it writes nothing and lists the JSON paths that failed.
