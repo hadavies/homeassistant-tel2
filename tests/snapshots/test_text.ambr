@@ -1,0 +1,119 @@
+# serializer version: 1
+# name: test_text_snapshot[text.line_1_forward_destination-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': list([
+      None,
+    ]),
+    'area_id': None,
+    'capabilities': dict({
+      <TextEntityCapabilityAttribute.MAX: 'max'>: 20,
+      <TextEntityCapabilityAttribute.MIN: 'min'>: 0,
+      <TextEntityCapabilityAttribute.MODE: 'mode'>: <TextMode.TEXT: 'text'>,
+      <TextEntityCapabilityAttribute.PATTERN: 'pattern'>: '^\\+?[0-9 ()-]{7,20}$',
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'text',
+    'entity_category': <EntityCategory.CONFIG: 'config'>,
+    'entity_id': 'text.line_1_forward_destination',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Forward destination',
+    'options': dict({
+    }),
+    'original_device_class': None,
+    'original_icon': None,
+    'original_name': 'Forward destination',
+    'platform': 'tel2',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'forward_destination',
+    'unique_id': '00000000_441632960001_forward_destination',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_text_snapshot[text.line_1_forward_destination-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Line 1 Forward destination',
+      <TextEntityCapabilityAttribute.MAX: 'max'>: 20,
+      <TextEntityCapabilityAttribute.MIN: 'min'>: 0,
+      <TextEntityCapabilityAttribute.MODE: 'mode'>: <TextMode.TEXT: 'text'>,
+      <TextEntityCapabilityAttribute.PATTERN: 'pattern'>: '^\\+?[0-9 ()-]{7,20}$',
+    }),
+    'context': <ANY>,
+    'entity_id': 'text.line_1_forward_destination',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'unknown',
+  })
+# ---
+# name: test_text_snapshot[text.line_2_forward_destination-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': list([
+      None,
+    ]),
+    'area_id': None,
+    'capabilities': dict({
+      <TextEntityCapabilityAttribute.MAX: 'max'>: 20,
+      <TextEntityCapabilityAttribute.MIN: 'min'>: 0,
+      <TextEntityCapabilityAttribute.MODE: 'mode'>: <TextMode.TEXT: 'text'>,
+      <TextEntityCapabilityAttribute.PATTERN: 'pattern'>: '^\\+?[0-9 ()-]{7,20}$',
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'text',
+    'entity_category': <EntityCategory.CONFIG: 'config'>,
+    'entity_id': 'text.line_2_forward_destination',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Forward destination',
+    'options': dict({
+    }),
+    'original_device_class': None,
+    'original_icon': None,
+    'original_name': 'Forward destination',
+    'platform': 'tel2',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'forward_destination',
+    'unique_id': '00000000_441632960002_forward_destination',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_text_snapshot[text.line_2_forward_destination-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Line 2 Forward destination',
+      <TextEntityCapabilityAttribute.MAX: 'max'>: 20,
+      <TextEntityCapabilityAttribute.MIN: 'min'>: 0,
+      <TextEntityCapabilityAttribute.MODE: 'mode'>: <TextMode.TEXT: 'text'>,
+      <TextEntityCapabilityAttribute.PATTERN: 'pattern'>: '^\\+?[0-9 ()-]{7,20}$',
+    }),
+    'context': <ANY>,
+    'entity_id': 'text.line_2_forward_destination',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'unknown',
+  })
+# ---
