@@ -104,6 +104,41 @@ class Tel2ConfigFlow(ConfigFlow, domain=DOMAIN):
             description_placeholders=placeholders,
         )
 
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> ConfigFlowResult:
+        """Start re-authentication after Tel2 rejected the stored login."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Ask for the login again and update the entry for the same account."""
+        errors: dict[str, str] = {}
+        placeholders: dict[str, str] = {}
+        reauth_entry = self._get_reauth_entry()
+        if user_input is not None:
+            login, password = _clean_credentials(user_input)
+            validated = await self._async_validate(
+                login, password, errors, placeholders
+            )
+            if validated is not None:
+                await self.async_set_unique_id(validated.details.account_code)
+                self._abort_if_unique_id_mismatch(reason="wrong_account")
+                return self.async_update_reload_and_abort(
+                    reauth_entry,
+                    data_updates=_entry_data(login, password, validated),
+                )
+        suggested = _suggested_values(user_input) or {
+            CONF_LOGIN: reauth_entry.data.get(CONF_LOGIN, "")
+        }
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=self.add_suggested_values_to_schema(USER_SCHEMA, suggested),
+            errors=errors,
+            description_placeholders=placeholders,
+        )
+
     async def _async_validate(
         self,
         login: str,
@@ -131,7 +166,11 @@ class Tel2ConfigFlow(ConfigFlow, domain=DOMAIN):
             )
             placeholders["level"] = REQUIRED_ACCESS_LEVEL
         except Tel2ApiError as err:
-            _LOGGER.warning("Tel2 refused %s during setup: %s", err.action, err.message)
+            _LOGGER.warning(
+                "Tel2 refused %s while validating the login: %s",
+                err.action,
+                err.message,
+            )
             errors["base"] = "unknown"
         except Exception:
             _LOGGER.exception("Unexpected error validating the Tel2 login")

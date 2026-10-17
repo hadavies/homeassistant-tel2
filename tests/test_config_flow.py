@@ -5,7 +5,7 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import aiohttp
-from homeassistant.config_entries import SOURCE_USER
+from homeassistant.config_entries import SOURCE_USER, ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers.selector import TextSelector, TextSelectorType
@@ -14,6 +14,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.tel2.const import CONF_LOGIN, CONF_PASSWORD, CONF_TOKEN, DOMAIN
 from tests.fake_tel2 import FakeTel2Api
+from tests.fixture_loader import load_fixture
 
 pytestmark = pytest.mark.usefixtures("mock_setup_entry")
 
@@ -264,3 +265,164 @@ async def test_user_never_logs_credentials(
 
     assert "hunter2" not in caplog.text
     assert "fake-token-for-tests" not in caplog.text
+
+
+OLD_DATA = {CONF_LOGIN: "old-login", CONF_PASSWORD: "old-pass", CONF_TOKEN: "old-token"}
+REAUTH_INPUT = {CONF_LOGIN: "  ha-login ", CONF_PASSWORD: " hunter2 "}
+
+
+@pytest.fixture
+def reauth_entry(
+    hass: HomeAssistant, mock_config_entry_factory: Callable[..., MockConfigEntry]
+) -> MockConfigEntry:
+    entry = mock_config_entry_factory(unique_id=ACCOUNT_CODE, data=dict(OLD_DATA))
+    entry.add_to_hass(hass)
+    return entry
+
+
+async def _start_reauth(hass: HomeAssistant, entry: MockConfigEntry) -> dict[str, Any]:
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.LOADED
+    result = dict(await entry.start_reauth_flow(hass))
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "reauth_confirm"
+    assert result["errors"] == {}
+    return result
+
+
+async def test_reauth_shows_form_with_login_prefilled(
+    hass: HomeAssistant, reauth_entry: MockConfigEntry
+) -> None:
+    result = await _start_reauth(hass, reauth_entry)
+
+    schema = {str(key): key for key in result["data_schema"].schema}
+    assert set(schema) == {CONF_LOGIN, CONF_PASSWORD}
+    assert schema[CONF_LOGIN].description == {"suggested_value": "old-login"}
+    assert not (schema[CONF_PASSWORD].description or {}).get("suggested_value")
+    password = result["data_schema"].schema[schema[CONF_PASSWORD]]
+    assert isinstance(password, TextSelector)
+    assert password.config["type"] == TextSelectorType.PASSWORD
+
+
+async def test_reauth_updates_credentials_and_reloads(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    mock_setup_entry: AsyncMock,
+    reauth_entry: MockConfigEntry,
+) -> None:
+    result = await _start_reauth(hass, reauth_entry)
+    assert len(mock_setup_entry.mock_calls) == 1
+
+    result = await _submit(hass, result["flow_id"], REAUTH_INPUT)
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reauth_successful"
+    assert reauth_entry.data == {
+        CONF_LOGIN: "ha-login",
+        CONF_PASSWORD: " hunter2 ",
+        CONF_TOKEN: "fake-token-for-tests",
+    }
+    assert reauth_entry.unique_id == ACCOUNT_CODE
+    assert len(mock_setup_entry.mock_calls) == 2
+    assert reauth_entry.state is ConfigEntryState.LOADED
+    get_token = fake_tel2.requests_for("Get-Token")[0]
+    assert get_token.body["login"] == "ha-login"
+    assert get_token.body["password"] == " hunter2 "
+
+
+async def test_reauth_wrong_account(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    mock_setup_entry: AsyncMock,
+    reauth_entry: MockConfigEntry,
+) -> None:
+    other = load_fixture("get_customer_details.json")
+    other["Data"]["Account_Code"] = "11111111"
+    fake_tel2.respond("Get-Customer-Details", other)
+    result = await _start_reauth(hass, reauth_entry)
+
+    result = await _submit(hass, result["flow_id"])
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "wrong_account"
+    assert reauth_entry.data == OLD_DATA
+    assert reauth_entry.unique_id == ACCOUNT_CODE
+    assert len(mock_setup_entry.mock_calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("action", "response", "error"),
+    [
+        ("Get-Token", "error_wrong_password.json", "invalid_auth"),
+        ("Get-Token", aiohttp.ClientError(), "cannot_connect"),
+        ("Get-Webhooks", "error_access_refused_api.json", "insufficient_access"),
+        ("Get-Customer-Details", "error_generic.json", "unknown"),
+    ],
+)
+async def test_reauth_errors_then_recovers(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    reauth_entry: MockConfigEntry,
+    *,
+    action: str,
+    response: Any,
+    error: str,
+) -> None:
+    fake_tel2.respond(action, response, default_response(action))
+    result = await _start_reauth(hass, reauth_entry)
+
+    result = await _submit(hass, result["flow_id"])
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "reauth_confirm"
+    assert result["errors"] == {"base": error}
+    assert reauth_entry.data == OLD_DATA
+    login_key = next(
+        key for key in result["data_schema"].schema if str(key) == CONF_LOGIN
+    )
+    assert login_key.description == {"suggested_value": "ha-login"}
+
+    result = await _submit(hass, result["flow_id"])
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reauth_successful"
+    assert reauth_entry.data[CONF_PASSWORD] == "hunter2"
+
+
+async def test_reauth_insufficient_access_placeholders(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    reauth_entry: MockConfigEntry,
+) -> None:
+    fake_tel2.respond("Get-Subscriber-Status", "error_access_refused_voice.json")
+    result = await _start_reauth(hass, reauth_entry)
+
+    result = await _submit(hass, result["flow_id"])
+
+    assert result["errors"] == {"base": "insufficient_access"}
+    placeholders = result["description_placeholders"]
+    assert placeholders["contexts"] == "voice"
+    assert placeholders["level"] == "Full"
+
+
+async def test_reauth_never_logs_credentials(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    caplog: pytest.LogCaptureFixture,
+    reauth_entry: MockConfigEntry,
+) -> None:
+    caplog.set_level("DEBUG")
+    fake_tel2.respond("Get-Token", "error_generic.json", "get_token.json")
+    result = await _start_reauth(hass, reauth_entry)
+
+    result = await _submit(hass, result["flow_id"])
+    result = await _submit(hass, result["flow_id"])
+    await hass.async_block_till_done()
+
+    assert result["reason"] == "reauth_successful"
+    for secret in ("hunter2", "fake-token-for-tests", "old-pass", "old-token"):
+        assert secret not in caplog.text
