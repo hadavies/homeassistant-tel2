@@ -2,6 +2,8 @@
 
 import asyncio
 from collections.abc import Iterable
+from dataclasses import replace
+from datetime import timedelta
 import logging
 from typing import Final
 
@@ -12,8 +14,21 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import Tel2ApiError, Tel2AuthError, Tel2Client, Tel2ConnectionError, Tel2Error
-from .const import ACCOUNT_SCAN_INTERVAL, DOMAIN, MANUFACTURER
-from .models import AccountState, BundleUsage, CustomerDetails, Tel2Number
+from .const import (
+    ACCOUNT_SCAN_INTERVAL,
+    CONF_SCAN_INTERVAL,
+    DEFAULT_SCAN_INTERVAL_MINUTES,
+    DOMAIN,
+    MANUFACTURER,
+)
+from .models import (
+    AccountState,
+    BundleUsage,
+    CustomerDetails,
+    LinesState,
+    LineState,
+    Tel2Number,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -141,6 +156,68 @@ class Tel2AccountCoordinator(DataUpdateCoordinator[AccountState]):
             if device is not None:
                 registry.async_remove_device(device.id)
         self._known_numbers = current
+
+
+class Tel2LinesCoordinator(DataUpdateCoordinator[LinesState]):
+    """Refresh registration and prefs for every number on the account."""
+
+    config_entry: ConfigEntry
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        client: Tel2Client,
+        account: Tel2AccountCoordinator,
+    ) -> None:
+        """Initialise the coordinator."""
+        minutes = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_MINUTES)
+        super().__init__(
+            hass,
+            _LOGGER,
+            config_entry=entry,
+            name="tel2 lines",
+            update_interval=timedelta(minutes=minutes),
+            always_update=False,
+        )
+        self.client = client
+        self.account = account
+
+    async def _async_update_data(self) -> LinesState:
+        """Fetch registration and prefs, keeping only the account's numbers."""
+        # HA types data as never None, but it is until the first refresh.
+        account: AccountState | None = self.account.data
+        if account is None:
+            return LinesState(lines={})
+        try:
+            async with asyncio.TaskGroup() as group:
+                status = group.create_task(self.client.async_get_subscriber_status())
+                prefs = group.create_task(self.client.async_get_all_prefs())
+        except (Tel2Error, ExceptionGroup) as err:
+            raise _update_error(err) from err
+        registered = status.result()
+        line_prefs = prefs.result()
+        return LinesState(
+            lines={
+                canonical: LineState(
+                    registered=canonical in registered,
+                    prefs=dict(line_prefs.get(canonical, {})),
+                )
+                for canonical in account.numbers
+            }
+        )
+
+    async def async_apply_optimistic(
+        self, canonical: str, pref: str, value: str
+    ) -> None:
+        """Show a pref Tel2 has accepted straight away, then refresh to confirm."""
+        current: LinesState | None = self.data
+        if current is not None and (line := current.lines.get(canonical)):
+            updated = replace(line, prefs={**line.prefs, pref: value})
+            self.async_set_updated_data(
+                LinesState(lines={**current.lines, canonical: updated})
+            )
+        await self.async_request_refresh()
 
 
 def _account_name(details: CustomerDetails) -> str:
