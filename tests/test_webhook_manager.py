@@ -16,6 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.setup import async_setup_component
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -39,6 +40,7 @@ from custom_components.tel2.webhook import (
     Tel2CallEventManager,
     async_delete_stale_registration,
     async_remove_registration,
+    signal_call_event_availability,
 )
 from tests.fake_tel2 import NO_DATA, FakeTel2Api
 from tests.fixture_loader import TEST_ENTRY_ID
@@ -826,6 +828,51 @@ async def test_added_registration_missing_on_re_read_is_warned(
     message = warning.getMessage()
     assert REGISTERED_URL not in message
     assert WEBHOOK_SECRET not in message
+
+
+def test_availability_signal_name_is_per_entry() -> None:
+    assert signal_call_event_availability("abc") == "tel2_abc_call_event_availability"
+
+
+async def test_availability_signal_is_sent_only_when_it_changes(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    cloud: CloudMocks,
+    mock_config_entry_factory: Callable[..., MockConfigEntry],
+) -> None:
+    fake_tel2.respond("Get-Webhooks", ours(REGISTERED_URL))
+    entry = add_entry(
+        hass,
+        mock_config_entry_factory,
+        webhook_id=WEBHOOK_ID,
+        webhook_secret=WEBHOOK_SECRET,
+    )
+    signals: list[None] = []
+    async_dispatcher_connect(
+        hass,
+        signal_call_event_availability(entry.entry_id),
+        lambda: signals.append(None),
+    )
+
+    manager = await start_manager(hass, entry)
+    assert signals == []
+
+    hass.config.external_url = EXTERNAL_URL
+    await manager.async_reconcile()
+    await manager.async_reconcile()
+    await hass.async_block_till_done()
+    assert (manager.available, len(signals)) == (True, 1)
+
+    hass.config.external_url = None
+    await manager.async_reconcile()
+    await hass.async_block_till_done()
+    assert (manager.available, len(signals)) == (False, 2)
+
+    hass.config.external_url = EXTERNAL_URL
+    await manager.async_reconcile()
+    manager.async_unload()
+    await hass.async_block_till_done()
+    assert (manager.available, len(signals)) == (False, 4)
 
 
 def test_runtime_data_type_hints_resolve() -> None:

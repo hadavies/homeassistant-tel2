@@ -68,6 +68,11 @@ def signal_call_event(entry_id: str) -> str:
     return f"{DOMAIN}_{entry_id}_call_event"
 
 
+def signal_call_event_availability(entry_id: str) -> str:
+    """Return the dispatcher signal sent when call event availability changes."""
+    return f"{DOMAIN}_{entry_id}_call_event_availability"
+
+
 def registration_name(entry: Tel2ConfigEntry) -> str:
     """Return the name of this entry's webhook registration on Tel2."""
     return f"homeassistant-tel2-{entry.entry_id}"
@@ -161,13 +166,14 @@ class Tel2CallEventManager:
             self._unsub_cloud()
             self._unsub_cloud = None
         ir.async_delete_issue(self.hass, DOMAIN, self._issue_id)
+        self._set_available(False)
 
     async def async_reconcile(self) -> None:
         """Resolve the public URL and make the Tel2 registration match it."""
         async with self._lock:
             url = await self._async_resolve_url()
             if url is None:
-                self.available = False
+                self._set_available(False)
                 ir.async_create_issue(
                     self.hass,
                     DOMAIN,
@@ -177,9 +183,17 @@ class Tel2CallEventManager:
                     translation_key=ISSUE_NO_PUBLIC_URL,
                 )
                 return
-            self.available = True
+            self._set_available(True)
             ir.async_delete_issue(self.hass, DOMAIN, self._issue_id)
             await self._async_register_on_tel2(url)
+
+    def _set_available(self, available: bool) -> None:
+        if available == self.available:
+            return
+        self.available = available
+        async_dispatcher_send(
+            self.hass, signal_call_event_availability(self.entry.entry_id)
+        )
 
     @property
     def _issue_id(self) -> str:

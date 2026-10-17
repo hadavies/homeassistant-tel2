@@ -1,7 +1,7 @@
 """Data update coordinators for the Tel2 integration."""
 
 import asyncio
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import replace
 from datetime import timedelta
 import logging
@@ -57,6 +57,7 @@ class Tel2AccountCoordinator(DataUpdateCoordinator[AccountState]):
         self._account_device_id: str | None = None
         self._known_numbers: set[str] | None = None
         self._warned_no_numbers = False
+        self._refresh_listeners: list[Callable[[], None]] = []
 
     @property
     def account_device_id(self) -> str:
@@ -64,6 +65,21 @@ class Tel2AccountCoordinator(DataUpdateCoordinator[AccountState]):
         if self._account_device_id is None:
             raise RuntimeError("The account device is created by the first refresh")
         return self._account_device_id
+
+    @callback
+    def async_add_refresh_listener(
+        self, listener: Callable[[], None]
+    ) -> Callable[[], None]:
+        """Call the listener after every successful refresh, even unchanged ones."""
+        self._refresh_listeners.append(listener)
+        return lambda: self._refresh_listeners.remove(listener)
+
+    @callback
+    def _async_refresh_finished(self) -> None:
+        # Data listeners skip unchanged refreshes (always_update=False).
+        if self.last_update_success:
+            for listener in list(self._refresh_listeners):
+                listener()
 
     async def _async_setup(self) -> None:
         """Create or update the account device before the first refresh."""

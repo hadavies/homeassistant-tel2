@@ -11,7 +11,7 @@ from .entity import Tel2LineEntity, async_add_line_entities
 from .models import CallEvent, Tel2Number
 from .numbering import display_number
 from .runtime import Tel2ConfigEntry
-from .webhook import signal_call_event
+from .webhook import signal_call_event, signal_call_event_availability
 
 PARALLEL_UPDATES = 0
 
@@ -32,8 +32,9 @@ async def async_setup_entry(
 
 
 def _party(value: str) -> str:
-    # The other party may be a raw string such as "anonymous" rather than a number.
-    return display_number(value) if value.isdecimal() and value.isascii() else value
+    # The other party may be raw text such as "anonymous" or "000", not a number.
+    is_number = value.isascii() and value.isdecimal() and not value.startswith("0")
+    return display_number(value) if is_number else value
 
 
 class Tel2CallEventEntity(Tel2LineEntity[Tel2AccountCoordinator], EventEntity):
@@ -52,13 +53,20 @@ class Tel2CallEventEntity(Tel2LineEntity[Tel2AccountCoordinator], EventEntity):
         return super().available and manager is not None and manager.available
 
     async def async_added_to_hass(self) -> None:
-        """Subscribe to this entry's call events."""
+        """Subscribe to this entry's call events and their availability."""
         await super().async_added_to_hass()
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
                 signal_call_event(self._entry.entry_id),
                 self._async_handle_call_event,
+            )
+        )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                signal_call_event_availability(self._entry.entry_id),
+                self.async_write_ha_state,
             )
         )
 

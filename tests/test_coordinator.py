@@ -493,3 +493,26 @@ async def test_unchanged_refresh_does_not_notify_listeners(
     await coordinator.async_refresh()
     assert len(calls) == 1
     unsubscribe()
+
+
+async def test_refresh_listeners_follow_every_successful_refresh(
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    coordinator: Tel2AccountCoordinator,
+    fake_tel2: FakeTel2Api,
+) -> None:
+    await first_refresh(hass, entry, coordinator)
+    calls: list[None] = []
+    unsubscribe = coordinator.async_add_refresh_listener(lambda: calls.append(None))
+
+    await coordinator.async_refresh()
+    assert len(calls) == 1
+
+    fake_tel2.respond("Get-Account-Balance", aiohttp.ClientError("down"))
+    await coordinator.async_refresh()
+    assert len(calls) == 1
+
+    unsubscribe()
+    fake_tel2.respond("Get-Account-Balance", "get_account_balance.json")
+    await coordinator.async_refresh()
+    assert len(calls) == 1

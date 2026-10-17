@@ -1,5 +1,6 @@
 """The Tel2 integration."""
 
+import logging
 from typing import Final
 
 from homeassistant.config_entries import ConfigEntryState
@@ -9,9 +10,24 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import Tel2Client
-from .const import CONF_LOGIN, CONF_PASSWORD, CONF_TOKEN, DOMAIN
+from .const import (
+    CONF_CALL_EVENTS,
+    CONF_LOGIN,
+    CONF_PASSWORD,
+    CONF_TEL2_WEBHOOK_ID,
+    CONF_TOKEN,
+    DEFAULT_CALL_EVENTS,
+    DOMAIN,
+)
 from .coordinator import Tel2AccountCoordinator, Tel2LinesCoordinator
 from .runtime import Tel2ConfigEntry, Tel2RuntimeData
+from .webhook import (
+    Tel2CallEventManager,
+    async_delete_stale_registration,
+    async_remove_registration,
+)
+
+_LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: Final[list[Platform]] = [
     Platform.BINARY_SENSOR,
@@ -45,20 +61,65 @@ async def async_setup_entry(hass: HomeAssistant, entry: Tel2ConfigEntry) -> bool
     lines = Tel2LinesCoordinator(hass, entry, client, account)
     await lines.async_config_entry_first_refresh()
 
+    call_events: Tel2CallEventManager | None = None
+    if entry.options.get(CONF_CALL_EVENTS, DEFAULT_CALL_EVENTS):
+        call_events = await _async_start_call_events(hass, entry, client, account)
+    elif CONF_TEL2_WEBHOOK_ID in entry.data:
+        await async_delete_stale_registration(hass, entry, client)
+
     entry.runtime_data = Tel2RuntimeData(
         client,
         account,
         lines,
-        call_events=None,
+        call_events=call_events,
         account_device_id=account.account_device_id,
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
+# Call events are optional, so a failure to start them never fails setup: the
+# event entities stay unavailable until the next reload.
+async def _async_start_call_events(
+    hass: HomeAssistant,
+    entry: Tel2ConfigEntry,
+    client: Tel2Client,
+    account: Tel2AccountCoordinator,
+) -> Tel2CallEventManager | None:
+    manager = Tel2CallEventManager(hass, entry, client, account)
+    try:
+        await manager.async_start()
+    except Exception:
+        _LOGGER.exception("Could not start Tel2 call events")
+        return None
+
+    @callback
+    def _reconcile() -> None:
+        entry.async_create_background_task(
+            hass, manager.async_reconcile(), "tel2 call event reconcile"
+        )
+
+    entry.async_on_unload(account.async_add_refresh_listener(_reconcile))
+    return manager
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: Tel2ConfigEntry) -> bool:
-    """Unload a Tel2 config entry."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    """Unload a Tel2 config entry; the Tel2 call event registration is kept."""
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded and (call_events := entry.runtime_data.call_events) is not None:
+        call_events.async_unload()
+    return unloaded
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: Tel2ConfigEntry) -> None:
+    """Delete the Tel2 call event registration of a removed entry."""
+    client = Tel2Client(
+        async_get_clientsession(hass),
+        entry.data[CONF_LOGIN],
+        entry.data[CONF_PASSWORD],
+        token=entry.data.get(CONF_TOKEN),
+    )
+    await async_remove_registration(hass, entry, client)
 
 
 async def async_remove_config_entry_device(

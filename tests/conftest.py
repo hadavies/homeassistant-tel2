@@ -43,10 +43,13 @@ def mock_config_entry_factory() -> Callable[..., MockConfigEntry]:
 
 @pytest.fixture
 def mock_setup_entry() -> Generator[AsyncMock]:
-    """Patch entry setup so flow tests do not load the integration."""
-    with patch(
-        "custom_components.tel2.async_setup_entry", return_value=True
-    ) as mock_setup:
+    """Patch entry setup and unload so flow tests do not load the integration."""
+    with (
+        patch(
+            "custom_components.tel2.async_setup_entry", return_value=True
+        ) as mock_setup,
+        patch("custom_components.tel2.async_unload_entry", return_value=True),
+    ):
         yield mock_setup
 
 

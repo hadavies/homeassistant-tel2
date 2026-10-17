@@ -25,6 +25,7 @@ from custom_components.tel2.const import (
     DOMAIN,
 )
 from custom_components.tel2.runtime import Tel2RuntimeData
+from custom_components.tel2.webhook import Tel2CallEventManager
 from tests.fake_tel2 import FakeTel2Api
 from tests.helpers import (
     ACCOUNT_CODE,
@@ -69,7 +70,7 @@ async def test_setup_loads_both_coordinators(
     data = runtime(entry)
     assert set(data.account.data.numbers) == {LINE_1, LINE_2}
     assert set(data.lines.data.lines) == {LINE_1, LINE_2}
-    assert data.call_events is None
+    assert isinstance(data.call_events, Tel2CallEventManager)
     assert data.account.client is data.client
     assert data.lines.client is data.client
     assert data.lines.account is data.account
@@ -199,7 +200,10 @@ async def test_refreshed_token_is_persisted_without_reload(
 
     assert data.account.last_update_success
     assert fake_tel2.call_count("Get-Token") == 1
-    assert entry.data == {**DEFAULT_ENTRY_DATA, CONF_TOKEN: FIXTURE_TOKEN}
+    assert {key: entry.data[key] for key in DEFAULT_ENTRY_DATA} == {
+        **DEFAULT_ENTRY_DATA,
+        CONF_TOKEN: FIXTURE_TOKEN,
+    }
     assert entry.state is ConfigEntryState.LOADED
     assert entry.runtime_data is data
     assert fake_tel2.call_count("Get-Customer-Details") == details_calls + 1

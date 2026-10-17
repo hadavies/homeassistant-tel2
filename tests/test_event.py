@@ -15,12 +15,18 @@ from pytest_homeassistant_custom_component.common import (
 )
 from syrupy.assertion import SnapshotAssertion
 
-from custom_components.tel2.const import CALL_EVENT_TYPES, DOMAIN, CallEventType
+from custom_components.tel2.const import (
+    CALL_EVENT_TYPES,
+    CONF_CALL_EVENTS,
+    DOMAIN,
+    CallEventType,
+)
 from custom_components.tel2.models import CallEvent
 from custom_components.tel2.runtime import Tel2RuntimeData
 from custom_components.tel2.webhook import Tel2CallEventManager, signal_call_event
 from tests.fake_tel2 import FakeTel2Api
 from tests.helpers import ACCOUNT_CODE, LINE_1, LINE_2, async_setup_integration
+from tests.test_webhook_manager import EXTERNAL_URL
 
 CALL_1 = f"{ACCOUNT_CODE}_{LINE_1}_call"
 CALL_2 = f"{ACCOUNT_CODE}_{LINE_2}_call"
@@ -47,6 +53,14 @@ def state_of(hass: HomeAssistant, unique_id: str) -> State:
     state = hass.states.get(entity_id)
     assert state is not None
     return state
+
+
+async def setup_without_manager(
+    hass: HomeAssistant, fake_tel2: FakeTel2Api
+) -> MockConfigEntry:
+    return await async_setup_integration(
+        hass, fake_tel2, options={CONF_CALL_EVENTS: False}
+    )
 
 
 async def inject_manager(
@@ -95,7 +109,7 @@ async def test_event_snapshot(
     entity_registry: er.EntityRegistry,
     snapshot: SnapshotAssertion,
 ) -> None:
-    entry = await async_setup_integration(hass, fake_tel2)
+    entry = await setup_without_manager(hass, fake_tel2)
     await inject_manager(hass, entry)
 
     await snapshot_platform(hass, entity_registry, snapshot, entry.entry_id)
@@ -104,7 +118,7 @@ async def test_event_snapshot(
 async def test_one_call_entity_per_number_listing_every_type(
     hass: HomeAssistant, fake_tel2: FakeTel2Api
 ) -> None:
-    entry = await async_setup_integration(hass, fake_tel2)
+    entry = await setup_without_manager(hass, fake_tel2)
     await inject_manager(hass, entry)
 
     for unique_id in (CALL_1, CALL_2):
@@ -116,7 +130,7 @@ async def test_one_call_entity_per_number_listing_every_type(
 async def test_published_call_event_fires_matching_entity(
     hass: HomeAssistant, fake_tel2: FakeTel2Api
 ) -> None:
-    entry = await async_setup_integration(hass, fake_tel2)
+    entry = await setup_without_manager(hass, fake_tel2)
     await inject_manager(hass, entry)
 
     await publish(hass, entry, call_event())
@@ -136,7 +150,7 @@ async def test_published_call_event_fires_matching_entity(
 async def test_outbound_call_event_fires_calling_number(
     hass: HomeAssistant, fake_tel2: FakeTel2Api
 ) -> None:
-    entry = await async_setup_integration(hass, fake_tel2)
+    entry = await setup_without_manager(hass, fake_tel2)
     await inject_manager(hass, entry)
     event = CallEvent(
         number=LINE_2,
@@ -163,7 +177,7 @@ async def test_outbound_call_event_fires_calling_number(
 async def test_withheld_caller_kept_raw_without_time_or_duration(
     hass: HomeAssistant, fake_tel2: FakeTel2Api
 ) -> None:
-    entry = await async_setup_integration(hass, fake_tel2)
+    entry = await setup_without_manager(hass, fake_tel2)
     await inject_manager(hass, entry)
 
     await publish(
@@ -185,7 +199,7 @@ async def test_withheld_caller_kept_raw_without_time_or_duration(
 async def test_every_call_event_type_is_accepted(
     hass: HomeAssistant, fake_tel2: FakeTel2Api, event_type: CallEventType
 ) -> None:
-    entry = await async_setup_integration(hass, fake_tel2)
+    entry = await setup_without_manager(hass, fake_tel2)
     await inject_manager(hass, entry)
 
     await publish(hass, entry, call_event(event_type))
@@ -196,7 +210,7 @@ async def test_every_call_event_type_is_accepted(
 async def test_unavailable_without_a_manager(
     hass: HomeAssistant, fake_tel2: FakeTel2Api
 ) -> None:
-    entry = await async_setup_integration(hass, fake_tel2)
+    entry = await setup_without_manager(hass, fake_tel2)
 
     assert runtime(entry).call_events is None
     assert state_of(hass, CALL_1).state == STATE_UNAVAILABLE
@@ -206,7 +220,7 @@ async def test_unavailable_without_a_manager(
 async def test_availability_follows_the_manager(
     hass: HomeAssistant, fake_tel2: FakeTel2Api
 ) -> None:
-    entry = await async_setup_integration(hass, fake_tel2)
+    entry = await setup_without_manager(hass, fake_tel2)
     manager = await inject_manager(hass, entry, available=False)
 
     assert state_of(hass, CALL_1).state == STATE_UNAVAILABLE
@@ -216,3 +230,38 @@ async def test_availability_follows_the_manager(
     await hass.async_block_till_done()
 
     assert state_of(hass, CALL_1).state == STATE_UNKNOWN
+
+
+async def test_withheld_digits_are_not_shown_as_a_number(
+    hass: HomeAssistant, fake_tel2: FakeTel2Api
+) -> None:
+    entry = await setup_without_manager(hass, fake_tel2)
+    await inject_manager(hass, entry)
+
+    await publish(hass, entry, call_event(CallEventType.MISSED, other="000"))
+
+    assert state_of(hass, CALL_1).attributes["from"] == "000"
+
+
+async def test_manager_availability_change_updates_the_entity(
+    hass: HomeAssistant, fake_tel2: FakeTel2Api
+) -> None:
+    entry = await async_setup_integration(hass, fake_tel2)
+    manager = runtime(entry).call_events
+    assert isinstance(manager, Tel2CallEventManager)
+    assert state_of(hass, CALL_1).state == STATE_UNAVAILABLE
+    refreshes = fake_tel2.call_count("Get-Customer-Details")
+
+    hass.config.external_url = EXTERNAL_URL
+    await manager.async_reconcile()
+    await hass.async_block_till_done()
+
+    assert state_of(hass, CALL_1).state == STATE_UNKNOWN
+    assert fake_tel2.call_count("Get-Customer-Details") == refreshes
+
+    hass.config.external_url = None
+    await manager.async_reconcile()
+    await hass.async_block_till_done()
+
+    assert state_of(hass, CALL_1).state == STATE_UNAVAILABLE
+    assert fake_tel2.call_count("Get-Customer-Details") == refreshes
