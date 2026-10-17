@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to check against the manifest version (nothing is published)
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Check manifest version matches tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Compare manifest version with tag
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          manifest_version="$(jq -r .version custom_components/tel2/manifest.json)"
+          tag_version="${TAG#v}"
+          if [ "$manifest_version" != "$tag_version" ]; then
+            echo "::error file=custom_components/tel2/manifest.json::Manifest version $manifest_version does not match tag $TAG (expected $tag_version). Bump the manifest version or fix the tag."
+            exit 1
+          fi
+          echo "Manifest version $manifest_version matches tag $TAG."
+
+  publish:
+    name: Attach tel2.zip to release
+    needs: version
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # HACS extracts the zip straight into custom_components/tel2, so the integration files sit at the zip root.
+      - name: Build tel2.zip
+        run: |
+          cd custom_components/tel2
+          zip -r ../../tel2.zip . -x "*__pycache__*" "*.pyc"
+
+      - name: Upload tel2.zip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" tel2.zip --clobber --repo "$GITHUB_REPOSITORY"
