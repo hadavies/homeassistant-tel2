@@ -1,0 +1,100 @@
+# serializer version: 1
+# name: test_diagnostics_snapshot_with_call_events
+  dict({
+    'account': dict({
+      'balance': dict({
+        'available_balance': '10.00',
+        'balance': '12.34',
+      }),
+      'bundles': dict({
+        'line_1': dict({
+          'total_minutes': 1000,
+          'used_minutes': 37,
+        }),
+      }),
+      'details': dict({
+        'account_code': '**REDACTED**',
+        'company_name': '**REDACTED**',
+        'customer_name': '**REDACTED**',
+        'status': 'Active',
+      }),
+      'numbers': dict({
+        'line_1': dict({
+          'canonical': 'line_1',
+          'extension': '201',
+          'name': '**REDACTED**',
+          'tel2_id': 'line_1',
+        }),
+        'line_2': dict({
+          'canonical': 'line_2',
+          'extension': '202',
+          'name': '**REDACTED**',
+          'tel2_id': 'line_2',
+        }),
+      }),
+      'plan': dict({
+        'alias': 'Example Plan',
+        'description': 'Example business voice plan',
+      }),
+    }),
+    'call_events': dict({
+      'enabled': True,
+      'last_event_at': '2026-10-17T09:30:00+00:00',
+      'registered_on_tel2': True,
+      'running': True,
+      'url_source': 'cloud',
+    }),
+    'coordinators': dict({
+      'account': dict({
+        'last_update_success': True,
+      }),
+      'lines': dict({
+        'last_update_success': True,
+      }),
+    }),
+    'entry': dict({
+      'data': dict({
+        'cloudhook_url': '**REDACTED**',
+        'login': '**REDACTED**',
+        'password': '**REDACTED**',
+        'tel2_webhook_id': '**REDACTED**',
+        'token': '**REDACTED**',
+        'webhook_id': '**REDACTED**',
+        'webhook_secret': '**REDACTED**',
+      }),
+      'options': dict({
+        'call_events': True,
+      }),
+    }),
+    'lines': dict({
+      'lines': dict({
+        'line_1': dict({
+          'prefs': dict({
+            'anoncall_reject': '1',
+            'callforward_always_number': '**REDACTED**',
+            'callforward_always_status': '1',
+            'callrecording_disabled': '0',
+            'callrecording_type': '1',
+            'do_not_disturb_status': '1',
+            'other_pref_count': 33,
+            'profile_recordingenabled': '1',
+          }),
+          'registered': False,
+        }),
+        'line_2': dict({
+          'prefs': dict({
+            'anoncall_reject': '1',
+            'callforward_always_number': '**REDACTED**',
+            'callforward_always_status': '1',
+            'callrecording_disabled': '0',
+            'callrecording_type': '1',
+            'do_not_disturb_status': '1',
+            'other_pref_count': 33,
+            'profile_recordingenabled': '1',
+          }),
+          'registered': False,
+        }),
+      }),
+    }),
+  })
+# ---
