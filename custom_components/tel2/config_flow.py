@@ -5,10 +5,19 @@ from dataclasses import dataclass
 import logging
 from typing import Any, Final
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
-from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlowWithReload,
+)
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    BooleanSelector,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
     TextSelector,
     TextSelectorConfig,
     TextSelectorType,
@@ -16,7 +25,18 @@ from homeassistant.helpers.selector import (
 import probatio
 
 from .api import Tel2ApiError, Tel2AuthError, Tel2Client, Tel2ConnectionError
-from .const import CONF_LOGIN, CONF_PASSWORD, CONF_TOKEN, DOMAIN
+from .const import (
+    CONF_CALL_EVENTS,
+    CONF_LOGIN,
+    CONF_PASSWORD,
+    CONF_SCAN_INTERVAL,
+    CONF_TOKEN,
+    DEFAULT_CALL_EVENTS,
+    DEFAULT_SCAN_INTERVAL_MINUTES,
+    DOMAIN,
+    MAX_SCAN_INTERVAL_MINUTES,
+    MIN_SCAN_INTERVAL_MINUTES,
+)
 from .models import AccessContext, CustomerDetails
 
 _LOGGER = logging.getLogger(__name__)
@@ -38,6 +58,24 @@ USER_SCHEMA: Final = probatio.Schema(
                 type=TextSelectorType.PASSWORD, autocomplete="current-password"
             )
         ),
+    }
+)
+
+OPTIONS_SCHEMA: Final = probatio.Schema(
+    {
+        probatio.Required(CONF_SCAN_INTERVAL): probatio.All(
+            NumberSelector(
+                NumberSelectorConfig(
+                    min=MIN_SCAN_INTERVAL_MINUTES,
+                    max=MAX_SCAN_INTERVAL_MINUTES,
+                    step=1,
+                    mode=NumberSelectorMode.BOX,
+                    unit_of_measurement="min",
+                )
+            ),
+            probatio.Coerce(int),
+        ),
+        probatio.Required(CONF_CALL_EVENTS): BooleanSelector(),
     }
 )
 
@@ -76,6 +114,12 @@ class Tel2ConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Tel2."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> Tel2OptionsFlow:
+        """Return the options flow for a Tel2 entry."""
+        return Tel2OptionsFlow()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -176,6 +220,31 @@ class Tel2ConfigFlow(ConfigFlow, domain=DOMAIN):
             _LOGGER.exception("Unexpected error validating the Tel2 login")
             errors["base"] = "unknown"
         return None
+
+
+class Tel2OptionsFlow(OptionsFlowWithReload):
+    """Handle Tel2 options; saving them reloads the entry."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Ask for the line refresh interval and whether to use call events."""
+        if user_input is not None:
+            return self.async_create_entry(
+                data={
+                    CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL]),
+                    CONF_CALL_EVENTS: bool(user_input[CONF_CALL_EVENTS]),
+                }
+            )
+        current = {
+            CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL_MINUTES,
+            CONF_CALL_EVENTS: DEFAULT_CALL_EVENTS,
+            **self.config_entry.options,
+        }
+        return self.async_show_form(
+            step_id="init",
+            data_schema=self.add_suggested_values_to_schema(OPTIONS_SCHEMA, current),
+        )
 
 
 def _clean_credentials(user_input: Mapping[str, Any]) -> tuple[str, str]:
