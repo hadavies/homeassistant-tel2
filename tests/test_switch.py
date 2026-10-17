@@ -1,5 +1,6 @@
 """Tests for the Tel2 switch platform."""
 
+import asyncio
 import copy
 from typing import Any
 from unittest.mock import AsyncMock
@@ -382,3 +383,32 @@ async def test_external_change_shows_after_lines_refresh(
 
     for line in (LINE_1, LINE_2):
         assert all(state_of(hass, key, line) == STATE_ON for key in SWITCH_KEYS)
+
+
+async def test_refresh_in_flight_during_a_write_shows_what_tel2_returned(
+    hass: HomeAssistant, fake_tel2: FakeTel2Api
+) -> None:
+    entry = await async_setup_integration(hass, fake_tel2)
+    lines = runtime(entry).lines
+    lines.async_request_refresh = AsyncMock()  # type: ignore[method-assign]
+    fetch_prefs = lines.client.async_get_all_prefs
+    release = asyncio.Event()
+
+    async def slow_fetch_prefs() -> dict[str, dict[str, str]]:
+        prefs = await fetch_prefs()
+        await release.wait()
+        return prefs
+
+    lines.client.async_get_all_prefs = slow_fetch_prefs  # type: ignore[method-assign]
+    in_flight = hass.async_create_task(lines.async_refresh())
+    await asyncio.sleep(0)
+    lines.client.async_get_all_prefs = fetch_prefs  # type: ignore[method-assign]
+    await switch(hass, SERVICE_TURN_ON, "do_not_disturb")
+    assert state_of(hass, "do_not_disturb") == STATE_ON
+
+    release.set()
+    await in_flight
+    await hass.async_block_till_done()
+
+    assert lines.data.lines[LINE_1].prefs["do_not_disturb_status"] == "0"
+    assert state_of(hass, "do_not_disturb") == STATE_OFF

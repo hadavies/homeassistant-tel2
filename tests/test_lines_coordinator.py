@@ -138,7 +138,7 @@ async def test_coordinator_settings(
     assert lines.update_interval == timedelta(minutes=5)
     assert lines.config_entry is entry
     assert lines.account is account
-    assert lines.always_update is False
+    assert lines.always_update is True
 
 
 @pytest.mark.parametrize("options", [{CONF_SCAN_INTERVAL: 12}])

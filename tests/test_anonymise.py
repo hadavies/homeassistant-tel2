@@ -472,6 +472,7 @@ def test_leak_check_flags_learned_values_and_secret_names() -> None:
     paths = anonymiser.find_leaks(
         {
             "a.json": {
+                "Result": "0",
                 "x": "Zq7xK9mW",
                 "y": "hi morwenna",
                 "ok": "fine",
@@ -481,13 +482,13 @@ def test_leak_check_flags_learned_values_and_secret_names() -> None:
             }
         }
     )
-    assert paths == ["a.json.x", "a.json.y", "a.json.<key 3>", "a.json.z"]
+    assert paths == ["a.json.x", "a.json.y", "a.json.<key 4>", "a.json.z"]
 
 
 def test_short_numeric_secret_does_not_touch_decimals() -> None:
     result = anonymise_responses(
         {
-            "p.json": {"voicemail_pin": "0000", "Message": "pin 0000"},
+            "p.json": {"Result": "0", "voicemail_pin": "0000", "Message": "pin 0000"},
             "b.json": {"Rate": "10.0000"},
         }
     )
@@ -526,8 +527,8 @@ def test_prefixed_postcode_field_is_replaced() -> None:
 
 def test_postcode_in_free_text_fails_closed_without_the_value() -> None:
     with pytest.raises(anonymise.LeakError) as exc:
-        anonymise_responses({"f.json": {"Data": {"Message": "Ship to ZZ1 1ZZ"}}})
-    assert exc.value.paths == ["f.json.Data.Message"]
+        anonymise_responses({"f.json": {"Result": "0", "Message": "Ship to ZZ1 1ZZ"}})
+    assert exc.value.paths == ["f.json.Message"]
     assert "ZZ1" not in str(exc.value)
 
 
@@ -817,6 +818,29 @@ def test_free_text_outside_known_fields_is_replaced() -> None:
     assert data["tz"] == "london"
 
 
+def test_data_row_message_and_status_free_text_is_replaced() -> None:
+    result = anonymise_responses(
+        {
+            "f.json": {
+                "Result": "1",
+                "Status": "Success",
+                "Message": "Method Executed Successfully.",
+                "Data": [
+                    {
+                        "Message": "Missed call from Jane Smith",
+                        "Status": "Called back by Jane Smith",
+                    }
+                ],
+            }
+        }
+    )
+    envelope = result["f.json"]
+    assert envelope["Message"] == "Method Executed Successfully."
+    assert envelope["Data"] == [
+        {"Message": anonymise.REDACTED, "Status": anonymise.REDACTED}
+    ]
+
+
 def test_leak_check_flags_dates_except_the_placeholders() -> None:
     paths = anonymise.Anonymiser().find_leaks(
         {
@@ -837,6 +861,7 @@ def test_leak_check_flags_free_text_outside_known_fields() -> None:
     paths = anonymise.Anonymiser().find_leaks(
         {
             "a.json": {
+                "Result": "0",
                 "Note": "Jane Smith",
                 "Message": "Invalid token",
                 "CustomerName": "Example Customer",
@@ -848,6 +873,24 @@ def test_leak_check_flags_free_text_outside_known_fields() -> None:
         }
     )
     assert paths == ["a.json.Note", "a.json.Nested<json>.Note", "a.json.List[1]"]
+
+
+def test_leak_check_flags_free_text_in_data_row_message_and_status() -> None:
+    paths = anonymise.Anonymiser().find_leaks(
+        {
+            "a.json": {
+                "Result": "1",
+                "Message": "Method Executed Successfully.",
+                "Data": [
+                    {
+                        "Message": "Missed call from Jane Smith",
+                        "Status": "Called back by Jane Smith",
+                    }
+                ],
+            }
+        }
+    )
+    assert paths == ["a.json.Data[0].Message", "a.json.Data[0].Status"]
 
 
 def test_committed_captured_fixtures_are_unchanged_by_a_rerun() -> None:

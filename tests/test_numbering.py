@@ -20,6 +20,9 @@ from custom_components.tel2.numbering import (
         "+441632960123",
         "+44 1632 960123",
         "+44 (0)1632 960123",
+        "+44 01632 960123",
+        "0044 01632 960123",
+        "4401632960123",
         "00441632960123",
         "0044 1632 960123",
     ],
@@ -30,6 +33,10 @@ def test_forms_of_one_number_share_a_canonical_value(raw: str) -> None:
 
 def test_national_number_uses_given_country_code() -> None:
     assert canonical_number("092420000", country_code="64") == "6492420000"
+
+
+def test_trunk_zero_is_kept_after_a_foreign_country_code() -> None:
+    assert canonical_number("+64 09 242 0000") == "64092420000"
 
 
 def test_foreign_international_number_is_kept() -> None:

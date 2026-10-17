@@ -3,6 +3,7 @@
 from .const import TEL2_COUNTRY_CODE
 
 _SEPARATORS = str.maketrans("", "", " -()\t")
+_UK_TRUNK_PREFIX = TEL2_COUNTRY_CODE + "0"
 _MIN_DESTINATION_DIGITS = 7
 _MAX_DESTINATION_DIGITS = 15
 
@@ -17,6 +18,9 @@ def canonical_number(raw: str, country_code: str = TEL2_COUNTRY_CODE) -> str:
         digits = digits[2:]
     elif digits.startswith("0"):
         digits = country_code + digits[1:]
+    # A UK number never has a 0 after 44, so "+44 07700 ..." is a stray trunk zero.
+    if digits.startswith(_UK_TRUNK_PREFIX):
+        digits = TEL2_COUNTRY_CODE + digits.removeprefix(_UK_TRUNK_PREFIX)
     if (
         not digits.isdecimal()
         or not digits.isascii()

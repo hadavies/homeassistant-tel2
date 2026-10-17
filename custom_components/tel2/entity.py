@@ -2,7 +2,8 @@
 
 from collections.abc import Callable, Iterable
 
-from homeassistant.core import callback
+from homeassistant.core import Event, callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity import Entity, EntityDescription
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -92,7 +93,10 @@ def async_add_line_entities(
     async_add_entities: AddConfigEntryEntitiesCallback,
     factory: Callable[[Tel2Number], Iterable[Entity]],
 ) -> None:
-    """Add entities for every number now and for numbers that join the account."""
+    """Add entities for every number now and for numbers that join the account.
+
+    A number the factory returns no entities for is offered again on every refresh.
+    """
     account = entry.runtime_data.account
     known: set[str] = set()
 
@@ -103,12 +107,30 @@ def async_add_line_entities(
             # Forget numbers that left so they are re-added if they come back. An
             # empty list keeps its devices (see the coordinator), so keep them known.
             known.intersection_update(numbers)
-        new = [
-            number for canonical, number in numbers.items() if canonical not in known
-        ]
-        known.update(number.canonical for number in new)
-        if entities := [entity for number in new for entity in factory(number)]:
+        entities: list[Entity] = []
+        for canonical, number in numbers.items():
+            if canonical not in known and (added := list(factory(number))):
+                known.add(canonical)
+                entities.extend(added)
+        if entities:
             async_add_entities(entities)
+
+    @callback
+    def _forget_removed_device(
+        event: Event[dr.EventDeviceRegistryUpdatedData],
+    ) -> None:
+        if event.data["action"] != "remove":
+            return
+        device = event.data["device"]
+        if device["config_entry_id"] == entry.entry_id:
+            known.difference_update(
+                value for domain, value in device["identifiers"] if domain == DOMAIN
+            )
 
     _add_new_numbers()
     entry.async_on_unload(account.async_add_listener(_add_new_numbers))
+    entry.async_on_unload(
+        account.hass.bus.async_listen(
+            dr.EVENT_DEVICE_REGISTRY_UPDATED, _forget_removed_device
+        )
+    )

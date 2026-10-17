@@ -137,6 +137,25 @@ async def test_bundle_sensors_unavailable_once_bundle_disappears(
     assert state_of(hass, f"{ACCOUNT_CODE}_balance") == "12.34"
 
 
+async def test_bundle_sensors_added_once_a_bundle_appears(
+    hass: HomeAssistant, fake_tel2: FakeTel2Api, caplog: pytest.LogCaptureFixture
+) -> None:
+    fake_tel2.respond("Get-Line-Bundle-Usage", NO_DATA)
+    entry = await async_setup_integration(hass, fake_tel2)
+    registry = er.async_get(hass)
+    bundle_used = f"{ACCOUNT_CODE}_{LINE_1}_bundle_used"
+    assert registry.async_get_entity_id(Platform.SENSOR, DOMAIN, bundle_used) is None
+
+    fake_tel2.respond("Get-Line-Bundle-Usage", "get_line_bundle_usage.json")
+    for _ in range(2):
+        await runtime(entry).account.async_refresh()
+        await hass.async_block_till_done()
+
+    assert state_of(hass, bundle_used) == "37"
+    assert state_of(hass, f"{ACCOUNT_CODE}_{LINE_1}_bundle_total") == "1000"
+    assert "already exists" not in caplog.text
+
+
 async def test_plan_unknown_without_a_plan(
     hass: HomeAssistant, fake_tel2: FakeTel2Api
 ) -> None:

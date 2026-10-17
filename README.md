@@ -95,13 +95,13 @@ Changes apply straight away, no restart needed.
 - Balances are in GBP.
 - API connected is a diagnostic sensor, it turns off when the last refresh couldn't reach Tel2.
 - Registered is on while a phone or app is registered to the number.
-- The bundle sensors only appear for numbers with a call bundle.
+- The bundle sensors only appear for numbers with a call bundle, a bundle added later gets them on the next account refresh.
 - Settings changed in the Tel2 portal, the app or by star code show up within one line refresh.
 - Forward all calls won't turn on until a forward destination is set.
 - The forward destination has to start with 0 or +, e.g. `07700 900123` or `+1 202 555 0147`.
 - Resync line pushes the current settings to the phone, and both buttons need a phone registered on the line.
 - Call is unavailable while call events are off or Tel2 can't reach Home Assistant, see [Call events](#call-events).
-- If Tel2 can't be reached, the entities go unavailable and come back by themselves once it can.
+- If Tel2 can't be reached, the entities go unavailable and come back by themselves once it can. Call is the exception, call events still come through.
 
 ### Call event types
 

@@ -194,7 +194,9 @@ class Tel2LinesCoordinator(DataUpdateCoordinator[LinesState]):
             config_entry=entry,
             name="tel2 lines",
             update_interval=timedelta(minutes=minutes),
-            always_update=False,
+            # A refresh started before an optimistic write compares against stale
+            # data, so an unchanged result must still reach the entities.
+            always_update=True,
         )
         self.client = client
         self.account = account

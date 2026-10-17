@@ -10,8 +10,10 @@ from homeassistant.const import STATE_UNAVAILABLE, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.setup import async_setup_component
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
 from custom_components.tel2 import sensor
 from custom_components.tel2.const import DOMAIN, MANUFACTURER
@@ -290,6 +292,33 @@ async def test_empty_numbers_keep_entities_without_re_adding(
 
     assert state_of(hass, line_1_probe) == "unregistered"
     assert "already exists" not in caplog.text
+
+
+async def test_device_deleted_while_numbers_are_empty_returns_with_the_number(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    assert await async_setup_component(hass, "config", {})
+    entry = await async_setup_integration(hass, fake_tel2)
+    fake_tel2.respond("Get-Numbers", NO_DATA)
+    await refresh_account(hass, entry)
+    device = number_device(hass, entry, LINE_1)
+    assert device is not None
+
+    client = await hass_ws_client(hass)
+    response = await client.remove_device(device.id)
+    assert response["success"]
+    await hass.async_block_till_done()
+    assert number_device(hass, entry, LINE_1) is None
+
+    fake_tel2.respond("Get-Numbers", "get_numbers.json")
+    await refresh_account(hass, entry)
+
+    assert number_device(hass, entry, LINE_1) is not None
+    line_1_probe = line_probe_id(hass, LINE_1)
+    assert line_1_probe is not None
+    assert state_of(hass, line_1_probe) == "unregistered"
 
 
 async def test_unique_ids_are_stable_across_reload(

@@ -64,10 +64,9 @@ _GROUP_KEYS: Final[Mapping[str, str]] = {
 }
 _WEBHOOK_ROW_KEYS: Final = frozenset({"url", "secretheader", "secrettoken"})
 _OWN_WEBHOOK_PREFIX: Final = "homeassistant-tel2-"
-# Only these keys may keep text with spaces; anything else that reads as prose is replaced.
-_FREE_TEXT_KEYS: Final = frozenset(
-    {"message", "status", "billingdescription", "alias", "country"}
-)
+# Only these keys (and Message or Status on the envelope) may keep text with spaces.
+_FREE_TEXT_KEYS: Final = frozenset({"billingdescription", "alias", "country"})
+_ENVELOPE_FREE_TEXT_KEYS: Final = frozenset({"message", "status"})
 SECRET_HEADER_PLACEHOLDER: Final = "X-Example-Header"  # noqa: S105
 
 
@@ -278,6 +277,7 @@ class _Block(NamedTuple):
     address: bool = False
     line: bool = False
     webhook: bool = False
+    envelope: bool = False
 
 
 class LeakError(ValueError):
@@ -426,6 +426,7 @@ class Anonymiser:
             address=any(_address_placeholder(norm, False) for norm in norm_keys),
             line=bool(norm_keys & _LINE_ROW_KEYS),
             webhook=bool(norm_keys & _WEBHOOK_ROW_KEYS),
+            envelope=envelope,
         )
         result: dict[Any, Any] = {}
         for key, item in data.items():
@@ -519,7 +520,7 @@ class Anonymiser:
             if all(_SAFE_MAIL_RE.fullmatch(part) for part in parts):
                 return scrubbed
             return self._redact(value)
-        if norm_key not in _FREE_TEXT_KEYS and _is_free_text(value):
+        if not _may_be_free_text(norm_key, block.envelope) and _is_free_text(value):
             return self._redact(value)
         return self._scrub(value)
 
@@ -709,7 +710,7 @@ class Anonymiser:
             and (
                 self._leaks(str(value), exempt)
                 or (
-                    norm_key not in _FREE_TEXT_KEYS
+                    not _may_be_free_text(norm_key, exempt)
                     and _is_free_text(str(value))
                     and str(value) not in _SPACED_PLACEHOLDERS
                     and not _GENERIC_LINE_NAME_RE.fullmatch(str(value))
@@ -797,6 +798,12 @@ def _is_free_text(text: str) -> bool:
     rest = _TIMESTAMP_RE.sub("", text).strip()
     return (
         re.search(r"\s", rest) is not None and re.search(r"[A-Za-z]", rest) is not None
+    )
+
+
+def _may_be_free_text(norm_key: str, in_envelope: bool) -> bool:
+    return norm_key in _FREE_TEXT_KEYS or (
+        in_envelope and norm_key in _ENVELOPE_FREE_TEXT_KEYS
     )
 
 

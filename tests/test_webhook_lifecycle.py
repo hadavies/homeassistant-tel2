@@ -7,8 +7,15 @@ from unittest.mock import patch
 import aiohttp
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, Platform
-from homeassistant.core import HomeAssistant, State
+from homeassistant.core import (
+    Event,
+    EventStateChangedData,
+    HomeAssistant,
+    State,
+    callback,
+)
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -209,6 +216,47 @@ async def test_failed_account_refresh_does_not_reconcile(
 
     assert not runtime(entry).account.last_update_success
     assert fake_tel2.call_count("Get-Webhooks") == lookups
+
+
+async def test_call_event_fires_while_the_account_refresh_fails(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    hass_client_no_auth: ClientSessionGenerator,
+) -> None:
+    entry = await setup_with_external_url(hass, fake_tel2)
+    account = runtime(entry).account
+    fake_tel2.respond("Get-Line-Bundle-Usage", load_fixture("error_generic.json"))
+    await account.async_refresh()
+    await hass.async_block_till_done()
+    assert not account.last_update_success
+    assert call_state(hass).state == STATE_UNKNOWN
+    changes: list[State] = []
+
+    @callback
+    def record(event: Event[EventStateChangedData]) -> None:
+        if (state := event.data["new_state"]) is not None:
+            changes.append(state)
+
+    async_track_state_change_event(hass, call_state(hass).entity_id, record)
+    client = await hass_client_no_auth()
+    response = await client.post(
+        WEBHOOK_PATH,
+        json=load_fixture("webhook_inbound_missed.json"),
+        headers={SECRET_HEADER: WEBHOOK_SECRET},
+    )
+    assert response.status == 200
+    await hass.async_block_till_done()
+
+    [fired] = changes
+    assert dt_util.parse_datetime(fired.state) is not None
+    assert fired.attributes["event_type"] == "missed"
+
+    fake_tel2.respond("Get-Line-Bundle-Usage", "get_line_bundle_usage.json")
+    await account.async_refresh()
+    await hass.async_block_till_done()
+
+    assert account.last_update_success
+    assert changes == [fired]
 
 
 async def test_unload_keeps_the_tel2_registration(

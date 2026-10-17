@@ -1,5 +1,6 @@
 """Tests for the Tel2 call event platform."""
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, create_autospec
 
@@ -230,6 +231,21 @@ async def test_availability_follows_the_manager(
     await hass.async_block_till_done()
 
     assert state_of(hass, CALL_1).state == STATE_UNKNOWN
+
+
+async def test_unavailable_once_the_number_leaves_the_account(
+    hass: HomeAssistant, fake_tel2: FakeTel2Api
+) -> None:
+    entry = await setup_without_manager(hass, fake_tel2)
+    await inject_manager(hass, entry)
+    account = runtime(entry).account
+
+    numbers = {LINE_1: account.data.numbers[LINE_1]}
+    account.async_set_updated_data(replace(account.data, numbers=numbers))
+    await hass.async_block_till_done()
+
+    assert state_of(hass, CALL_1).state == STATE_UNKNOWN
+    assert state_of(hass, CALL_2).state == STATE_UNAVAILABLE
 
 
 async def test_withheld_digits_are_not_shown_as_a_number(
