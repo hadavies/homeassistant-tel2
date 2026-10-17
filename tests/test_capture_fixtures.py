@@ -229,11 +229,11 @@ def test_main_writes_nothing_when_the_leak_check_trips(
 ) -> None:
     fake_tel2.overrides["Get-Account-Balance"] = {
         "Result": "1",
-        "Data": {"Balance": "123456789012"},
+        "Data": {"Reference": "123456789012"},
     }
     out = tmp_path / "out"
     with pytest.raises(SystemExit) as exc:
         main(["--out", str(out)])
-    assert "get_account_balance.json.Data.Balance" in str(exc.value.code)
+    assert "get_account_balance.json.Data.Reference" in str(exc.value.code)
     assert "123456789012" not in str(exc.value.code)
     assert not out.exists()

@@ -300,6 +300,9 @@ def _dump(responses: dict[str, Any], **kwargs: Any) -> str:
         "web_password",
         "PinNumber",
         "Security_Answer",
+        "HASH",
+        "CHASH",
+        "password_hash",
     ],
 )
 def test_unknown_secret_field_names_are_dropped(key: str) -> None:
@@ -451,8 +454,8 @@ def test_webhook_name_is_kept() -> None:
 
 def test_unscrubbable_digit_run_fails_closed_without_the_value() -> None:
     with pytest.raises(anonymise.LeakError) as exc:
-        anonymise_responses({"f.json": {"Data": {"Balance": "123456789012"}}})
-    assert exc.value.paths == ["f.json.Data.Balance"]
+        anonymise_responses({"f.json": {"Data": {"Reference": "123456789012"}}})
+    assert exc.value.paths == ["f.json.Data.Reference"]
     assert "123456789012" not in str(exc.value)
 
 
@@ -478,10 +481,10 @@ def test_short_numeric_secret_does_not_touch_decimals() -> None:
     result = anonymise_responses(
         {
             "p.json": {"voicemail_pin": "0000", "Note": "pin 0000"},
-            "b.json": {"AvailableBalance": "10.0000"},
+            "b.json": {"Rate": "10.0000"},
         }
     )
-    assert result["b.json"]["AvailableBalance"] == "10.0000"
+    assert result["b.json"]["Rate"] == "10.0000"
     assert result["p.json"]["Note"] == "pin [REDACTED]"
 
 
@@ -590,3 +593,17 @@ def test_anchored_ambiguous_address_value_is_not_scrubbed_elsewhere() -> None:
     )
     assert result["c.json"]["Data"]["State"] == "Example County"
     assert result["o.json"]["Data"]["Status"] == "Active"
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"Balance": "-4321.98", "AvailableBalance": "8765.43"},
+        {"Balance": -4321.98, "AvailableBalance": 8765.43},
+        {"Charge": "0.83", "ChargeExcl": "0.69"},
+    ],
+)
+def test_money_values_are_replaced(data: dict[str, Any]) -> None:
+    out = _dump({"f.json": {"Data": data}})
+    for value in data.values():
+        assert str(value) not in out

@@ -42,7 +42,12 @@ _SECRET_SUBSTRINGS: Final = (
     "token",
     "apikey",
     "securityanswer",
+    "hash",
 )
+_MONEY_KEYS: Final = frozenset(
+    {"balance", "availablebalance", "charge", "chargeexcl", "amount", "credit"}
+)
+MONEY_PLACEHOLDER: Final = "10.00"
 _TRIVIAL_SECRET_VALUES: Final = frozenset(
     {"true", "false", "none", "null", "enabled", "disabled", "active", "inactive"}
 )
@@ -380,6 +385,8 @@ class Anonymiser:
         return result
 
     def _number(self, key: str, norm_key: str, value: float) -> float:
+        if norm_key in _MONEY_KEYS:
+            return type(value)(10)
         if _is_id_key(key, norm_key) and value != 0:
             return type(value)(self._id_number(str(value)))
         if isinstance(value, float) and not value.is_integer():
@@ -396,6 +403,8 @@ class Anonymiser:
         return value
 
     def _str(self, key: str, norm_key: str, value: str, block: _Block) -> str:
+        if norm_key in _MONEY_KEYS:
+            return MONEY_PLACEHOLDER
         if norm_key == "secretheader":
             return SECRET_HEADER_PLACEHOLDER
         if norm_key in _ACCOUNT_KEYS:
