@@ -8,7 +8,7 @@ import logging
 from typing import Final
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -182,6 +182,23 @@ class Tel2LinesCoordinator(DataUpdateCoordinator[LinesState]):
         )
         self.client = client
         self.account = account
+
+    async def _async_setup(self) -> None:
+        """Follow the account so a new number gets its line state straight away."""
+        self.config_entry.async_on_unload(
+            self.account.async_add_listener(self._async_account_updated)
+        )
+
+    @callback
+    def _async_account_updated(self) -> None:
+        current: LinesState | None = self.data
+        account: AccountState | None = self.account.data
+        if current is None or account is None:
+            return
+        if not set(account.numbers) <= set(current.lines):
+            self.config_entry.async_create_task(
+                self.hass, self.async_request_refresh(), "tel2 new number refresh"
+            )
 
     async def _async_update_data(self) -> LinesState:
         """Fetch registration and prefs, keeping only the account's numbers."""

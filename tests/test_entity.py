@@ -197,12 +197,6 @@ async def test_number_added_on_tel2_gets_device_without_reload(
     assert probe_entry is not None
     assert probe_entry.device_id == device.id
     assert entity_id(hass, f"{ACCOUNT_CODE}_{LINE_3}_bundle_probe") is not None
-    # The lines coordinator has no state for the number until its next refresh.
-    assert state_of(hass, probe_id) == STATE_UNAVAILABLE
-
-    await data.lines.async_refresh()
-    await hass.async_block_till_done()
-
     assert state_of(hass, probe_id) == "unregistered"
 
 

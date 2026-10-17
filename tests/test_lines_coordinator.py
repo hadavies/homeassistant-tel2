@@ -5,12 +5,16 @@ from datetime import timedelta
 from typing import Any
 
 import aiohttp
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 
 from custom_components.tel2.api import Tel2Client
 from custom_components.tel2.const import (
@@ -33,6 +37,7 @@ from custom_components.tel2.coordinator import (
 from custom_components.tel2.models import LinesState
 from tests.fake_tel2 import NO_DATA, FakeTel2Api
 from tests.fixture_loader import load_fixture
+from tests.helpers import async_setup_integration
 
 ACCOUNT_CODE = "00000000"
 LINE_1 = "441632960001"
@@ -381,3 +386,28 @@ async def test_tel2_error_is_update_failed_with_message(
     err = loaded.last_exception
     assert isinstance(err, UpdateFailed)
     assert err.translation_key == "update_tel2_error"
+
+
+async def test_new_account_number_refreshes_lines_once(
+    hass: HomeAssistant, fake_tel2: FakeTel2Api, freezer: FrozenDateTimeFactory
+) -> None:
+    entry = await async_setup_integration(hass, fake_tel2)
+    account = entry.runtime_data.account
+    lines = entry.runtime_data.lines
+    before = fake_tel2.call_count("Get-All-Pref-Summary")
+    fake_tel2.respond("Get-Numbers", "get_numbers_number_added.json")
+    fake_tel2.respond("Get-All-Pref-Summary", "get_all_pref_summary_number_added.json")
+
+    await account.async_refresh()
+    await hass.async_block_till_done()
+
+    assert fake_tel2.call_count("Get-All-Pref-Summary") == before + 1
+    assert LINE_3 in lines.data.lines
+
+    freezer.tick(timedelta(seconds=30))
+    async_fire_time_changed(hass)
+    await account.async_refresh()
+    account.async_update_listeners()
+    await hass.async_block_till_done()
+
+    assert fake_tel2.call_count("Get-All-Pref-Summary") == before + 1
