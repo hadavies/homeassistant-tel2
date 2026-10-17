@@ -1,0 +1,81 @@
+name: Bug report
+description: Something in the Tel2 integration isn't working.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this. It's worth checking the [troubleshooting section](https://github.com/hadavies/homeassistant-tel2#troubleshooting) of the README first.
+
+        This repo is public, so anything you post here can be read by anyone.
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant version
+      description: Settings > About.
+      placeholder: "2026.10.1"
+    validations:
+      required: true
+  - type: input
+    id: integration_version
+    attributes:
+      label: Integration version
+      description: The version HACS shows for Tel2, or the version in manifest.json.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened
+      description: Include the entity or action involved if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected to happen
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to ...
+        2. Turn on ...
+        3. See ...
+    validations:
+      required: false
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: |
+        Settings > Devices & services > Tel2 > three dots > Download diagnostics. Drag the file in here, or paste its contents.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Debug logs
+      description: |
+        Turn on debug logging, reproduce the problem, then paste the Tel2 lines here. You can use Enable debug logging on the Tel2 integration page, or add this to configuration.yaml and restart:
+
+        ```yaml
+        logger:
+          default: warning
+          logs:
+            custom_components.tel2: debug
+        ```
+      render: text
+    validations:
+      required: false
+  - type: checkboxes
+    id: personal_data
+    attributes:
+      label: Personal details
+      options:
+        - label: I've checked the diagnostics and logs above for phone numbers, names, addresses, account codes and anything else personal before posting.
+          required: true

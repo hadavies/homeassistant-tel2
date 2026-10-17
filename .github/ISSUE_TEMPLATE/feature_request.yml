@@ -1,0 +1,30 @@
+name: Feature request
+description: Suggest something the Tel2 integration could do.
+title: "[Feature]: "
+labels: ["feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The integration can only do what the Tel2 API allows, so it helps to say which part of the Tel2 portal or API this would use, if you know.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: What you'd like
+      description: How you'd like it to work in Home Assistant, E.G a new sensor, switch or action.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Anything else you've tried or considered.
+    validations:
+      required: false
