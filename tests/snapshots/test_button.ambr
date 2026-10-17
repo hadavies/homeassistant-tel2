@@ -1,0 +1,203 @@
+# serializer version: 1
+# name: test_buttons_snapshot[button.line_1_reboot_phone-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': list([
+      None,
+    ]),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'button',
+    'entity_category': <EntityCategory.CONFIG: 'config'>,
+    'entity_id': 'button.line_1_reboot_phone',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Reboot phone',
+    'options': dict({
+    }),
+    'original_device_class': <ButtonDeviceClass.RESTART: 'restart'>,
+    'original_icon': None,
+    'original_name': 'Reboot phone',
+    'platform': 'tel2',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'reboot_phone',
+    'unique_id': '00000000_441632960001_reboot_phone',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_buttons_snapshot[button.line_1_reboot_phone-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      <EntityStateAttribute.DEVICE_CLASS: 'device_class'>: 'restart',
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Line 1 Reboot phone',
+    }),
+    'context': <ANY>,
+    'entity_id': 'button.line_1_reboot_phone',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'unknown',
+  })
+# ---
+# name: test_buttons_snapshot[button.line_1_resync_line-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': list([
+      None,
+    ]),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'button',
+    'entity_category': <EntityCategory.CONFIG: 'config'>,
+    'entity_id': 'button.line_1_resync_line',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Resync line',
+    'options': dict({
+    }),
+    'original_device_class': None,
+    'original_icon': None,
+    'original_name': 'Resync line',
+    'platform': 'tel2',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'resync_line',
+    'unique_id': '00000000_441632960001_resync_line',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_buttons_snapshot[button.line_1_resync_line-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Line 1 Resync line',
+    }),
+    'context': <ANY>,
+    'entity_id': 'button.line_1_resync_line',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'unknown',
+  })
+# ---
+# name: test_buttons_snapshot[button.line_2_reboot_phone-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': list([
+      None,
+    ]),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'button',
+    'entity_category': <EntityCategory.CONFIG: 'config'>,
+    'entity_id': 'button.line_2_reboot_phone',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Reboot phone',
+    'options': dict({
+    }),
+    'original_device_class': <ButtonDeviceClass.RESTART: 'restart'>,
+    'original_icon': None,
+    'original_name': 'Reboot phone',
+    'platform': 'tel2',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'reboot_phone',
+    'unique_id': '00000000_441632960002_reboot_phone',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_buttons_snapshot[button.line_2_reboot_phone-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      <EntityStateAttribute.DEVICE_CLASS: 'device_class'>: 'restart',
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Line 2 Reboot phone',
+    }),
+    'context': <ANY>,
+    'entity_id': 'button.line_2_reboot_phone',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'unknown',
+  })
+# ---
+# name: test_buttons_snapshot[button.line_2_resync_line-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': list([
+      None,
+    ]),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'button',
+    'entity_category': <EntityCategory.CONFIG: 'config'>,
+    'entity_id': 'button.line_2_resync_line',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Resync line',
+    'options': dict({
+    }),
+    'original_device_class': None,
+    'original_icon': None,
+    'original_name': 'Resync line',
+    'platform': 'tel2',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'resync_line',
+    'unique_id': '00000000_441632960002_resync_line',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_buttons_snapshot[button.line_2_resync_line-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Line 2 Resync line',
+    }),
+    'context': <ANY>,
+    'entity_id': 'button.line_2_resync_line',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'unknown',
+  })
+# ---
