@@ -6,6 +6,7 @@ from homeassistant.config_entries import ConfigEntry
 
 from .api import Tel2Client
 from .coordinator import Tel2AccountCoordinator, Tel2LinesCoordinator
+from .webhook import Tel2CallEventManager
 
 
 @dataclass(slots=True)
@@ -15,7 +16,7 @@ class Tel2RuntimeData:
     client: Tel2Client
     account: Tel2AccountCoordinator
     lines: Tel2LinesCoordinator
-    call_events: object | None
+    call_events: Tel2CallEventManager | None
     account_device_id: str
 
 
