@@ -1,0 +1,153 @@
+# serializer version: 1
+# name: test_event_snapshot[event.line_1_call-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': list([
+      None,
+    ]),
+    'area_id': None,
+    'capabilities': dict({
+      <EventEntityCapabilityAttribute.EVENT_TYPES: 'event_types'>: list([
+        <CallEventType.RINGING: 'ringing'>,
+        <CallEventType.ANSWERED: 'answered'>,
+        <CallEventType.ENDED: 'ended'>,
+        <CallEventType.MISSED: 'missed'>,
+        <CallEventType.BUSY: 'busy'>,
+        <CallEventType.NO_ANSWER: 'no_answer'>,
+        <CallEventType.REJECTED: 'rejected'>,
+        <CallEventType.INVALID: 'invalid'>,
+        <CallEventType.NOT_AVAILABLE: 'not_available'>,
+        <CallEventType.BLOCKED: 'blocked'>,
+      ]),
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'event',
+    'entity_category': None,
+    'entity_id': 'event.line_1_call',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Call',
+    'options': dict({
+    }),
+    'original_device_class': None,
+    'original_icon': None,
+    'original_name': 'Call',
+    'platform': 'tel2',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'call',
+    'unique_id': '00000000_441632960001_call',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_event_snapshot[event.line_1_call-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      <EventEntityStateAttribute.EVENT_TYPE: 'event_type'>: None,
+      <EventEntityCapabilityAttribute.EVENT_TYPES: 'event_types'>: list([
+        <CallEventType.RINGING: 'ringing'>,
+        <CallEventType.ANSWERED: 'answered'>,
+        <CallEventType.ENDED: 'ended'>,
+        <CallEventType.MISSED: 'missed'>,
+        <CallEventType.BUSY: 'busy'>,
+        <CallEventType.NO_ANSWER: 'no_answer'>,
+        <CallEventType.REJECTED: 'rejected'>,
+        <CallEventType.INVALID: 'invalid'>,
+        <CallEventType.NOT_AVAILABLE: 'not_available'>,
+        <CallEventType.BLOCKED: 'blocked'>,
+      ]),
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Line 1 Call',
+    }),
+    'context': <ANY>,
+    'entity_id': 'event.line_1_call',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'unknown',
+  })
+# ---
+# name: test_event_snapshot[event.line_2_call-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': list([
+      None,
+    ]),
+    'area_id': None,
+    'capabilities': dict({
+      <EventEntityCapabilityAttribute.EVENT_TYPES: 'event_types'>: list([
+        <CallEventType.RINGING: 'ringing'>,
+        <CallEventType.ANSWERED: 'answered'>,
+        <CallEventType.ENDED: 'ended'>,
+        <CallEventType.MISSED: 'missed'>,
+        <CallEventType.BUSY: 'busy'>,
+        <CallEventType.NO_ANSWER: 'no_answer'>,
+        <CallEventType.REJECTED: 'rejected'>,
+        <CallEventType.INVALID: 'invalid'>,
+        <CallEventType.NOT_AVAILABLE: 'not_available'>,
+        <CallEventType.BLOCKED: 'blocked'>,
+      ]),
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'event',
+    'entity_category': None,
+    'entity_id': 'event.line_2_call',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Call',
+    'options': dict({
+    }),
+    'original_device_class': None,
+    'original_icon': None,
+    'original_name': 'Call',
+    'platform': 'tel2',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'call',
+    'unique_id': '00000000_441632960002_call',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_event_snapshot[event.line_2_call-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      <EventEntityStateAttribute.EVENT_TYPE: 'event_type'>: None,
+      <EventEntityCapabilityAttribute.EVENT_TYPES: 'event_types'>: list([
+        <CallEventType.RINGING: 'ringing'>,
+        <CallEventType.ANSWERED: 'answered'>,
+        <CallEventType.ENDED: 'ended'>,
+        <CallEventType.MISSED: 'missed'>,
+        <CallEventType.BUSY: 'busy'>,
+        <CallEventType.NO_ANSWER: 'no_answer'>,
+        <CallEventType.REJECTED: 'rejected'>,
+        <CallEventType.INVALID: 'invalid'>,
+        <CallEventType.NOT_AVAILABLE: 'not_available'>,
+        <CallEventType.BLOCKED: 'blocked'>,
+      ]),
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Line 2 Call',
+    }),
+    'context': <ANY>,
+    'entity_id': 'event.line_2_call',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'unknown',
+  })
+# ---
