@@ -32,6 +32,7 @@ from custom_components.tel2.const import (
     CONF_WEBHOOK_SECRET,
     DOMAIN,
 )
+from custom_components.tel2.coordinator import Tel2AccountCoordinator
 from custom_components.tel2.runtime import Tel2RuntimeData
 from custom_components.tel2.webhook import (
     CallEventStatus,
@@ -157,7 +158,9 @@ def make_client(hass: HomeAssistant, entry: MockConfigEntry) -> Tel2Client:
 async def start_manager(
     hass: HomeAssistant, entry: MockConfigEntry
 ) -> Tel2CallEventManager:
-    manager = Tel2CallEventManager(hass, entry, make_client(hass, entry))
+    client = make_client(hass, entry)
+    account = Tel2AccountCoordinator(hass, entry, client)
+    manager = Tel2CallEventManager(hass, entry, client, account)
     await manager.async_start()
     await hass.async_block_till_done()
     return manager

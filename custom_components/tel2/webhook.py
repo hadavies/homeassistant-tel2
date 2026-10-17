@@ -3,16 +3,19 @@
 import asyncio
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
+import hmac
 import logging
 import secrets
 from typing import TYPE_CHECKING, Any, Final, Literal
 
-from aiohttp import web
+from aiohttp import ClientError, web
 from homeassistant.components import webhook
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.network import NoURLAvailableError
+from homeassistant.util import dt as dt_util
 from yarl import URL
 
 from .api import Tel2ApiError, Tel2Client, Tel2Error
@@ -22,18 +25,31 @@ from .const import (
     CONF_WEBHOOK_ID,
     CONF_WEBHOOK_SECRET,
     DOMAIN,
+    TEL2_IGNORED_STATES,
+    TEL2_STATE_MAP,
 )
-from .models import WebhookRegistration, WebhookSpec
+from .models import AccountState, CallEvent, WebhookRegistration, WebhookSpec
+from .numbering import canonical_number
 
 if TYPE_CHECKING:
     from homeassistant.components.cloud import CloudConnectionState
 
+    from .coordinator import Tel2AccountCoordinator
     from .runtime import Tel2ConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
 SECRET_HEADER: Final = "X-Tel2-Signature"  # noqa: S105
 ISSUE_NO_PUBLIC_URL: Final = "call_events_no_public_url"
+TEL2_TIME_FORMAT: Final = "%Y-%m-%d %H:%M:%S"
+UNKNOWN_PARTY: Final = "unknown"
+OTHER_PARTY_MAX_LENGTH: Final = 32
+CALL_ID_MAX_LENGTH: Final = 64
+MAX_DURATION_DIGITS: Final = 9
+_DIRECTIONS: Final[Mapping[str, Literal["inbound", "outbound"]]] = {
+    "received": "inbound",
+    "dialed": "outbound",
+}
 
 type UrlSource = Literal["cloud", "external", "none"]
 
@@ -45,6 +61,11 @@ class CallEventStatus:
     url_source: UrlSource
     registered_on_tel2: bool
     last_event_at: datetime | None
+
+
+def signal_call_event(entry_id: str) -> str:
+    """Return the dispatcher signal carrying an entry's call events."""
+    return f"{DOMAIN}_{entry_id}_call_event"
 
 
 def registration_name(entry: Tel2ConfigEntry) -> str:
@@ -68,12 +89,17 @@ class Tel2CallEventManager:
     """Keep the HA webhook, the public URL and the Tel2 registration in step."""
 
     def __init__(
-        self, hass: HomeAssistant, entry: Tel2ConfigEntry, client: Tel2Client
+        self,
+        hass: HomeAssistant,
+        entry: Tel2ConfigEntry,
+        client: Tel2Client,
+        account: Tel2AccountCoordinator,
     ) -> None:
         """Initialise the manager; nothing is registered until async_start."""
         self.hass = hass
         self.entry = entry
         self.client = client
+        self.account = account
         self.available = False
         self._url_source: UrlSource = "none"
         self._registered = False
@@ -252,7 +278,126 @@ class Tel2CallEventManager:
         self, hass: HomeAssistant, webhook_id: str, request: web.Request
     ) -> web.Response:
         """Handle a Tel2 call event POST; Tel2 always gets a 200."""
+        if not self._signed(request):
+            _LOGGER.debug("Dropped a call event without a valid secret")
+        elif (payload := await _async_read_json(request)) is None:
+            _LOGGER.debug("Dropped a call event that is not valid JSON")
+        else:
+            self._handle_payload(payload)
         return web.Response(status=200)
+
+    def _signed(self, request: web.Request) -> bool:
+        expected = self.entry.data.get(CONF_WEBHOOK_SECRET)
+        received = request.headers.get(SECRET_HEADER)
+        if not isinstance(expected, str) or not expected or received is None:
+            return False
+        return hmac.compare_digest(
+            received.encode("utf-8", "surrogateescape"), expected.encode()
+        )
+
+    def _handle_payload(self, payload: Any) -> None:
+        state = payload.get("state") if isinstance(payload, dict) else None
+        if isinstance(state, str) and state in TEL2_IGNORED_STATES:
+            _LOGGER.debug("Ignored a call event with an ignored state")
+            return
+        try:
+            event = _parse_call_event(payload)
+        except ValueError as err:
+            _LOGGER.debug("Dropped a call event: %s", err)
+            return
+        account: AccountState | None = self.account.data
+        if account is None or event.number not in account.numbers:
+            _LOGGER.debug("Dropped a call event for a number not on the account")
+            return
+        self._last_event_at = dt_util.utcnow()
+        async_dispatcher_send(self.hass, signal_call_event(self.entry.entry_id), event)
+
+
+async def _async_read_json(request: web.Request) -> Any:
+    try:
+        return await request.json()
+    except ValueError, ClientError, web.HTTPException:
+        return None
+
+
+# Exception messages are logged, so they name the problem but never a value.
+def _parse_call_event(payload: Any) -> CallEvent:
+    if not isinstance(payload, dict):
+        raise ValueError("payload is not an object")  # noqa: TRY004
+    state = _required(payload, "state")
+    if (event_type := TEL2_STATE_MAP.get(state)) is None:
+        raise ValueError("unknown state")
+    direction = _DIRECTIONS.get(_required(payload, "type"))
+    if direction is None:
+        raise ValueError("unknown call type")
+    ours, theirs = ("to", "from") if direction == "inbound" else ("from", "to")
+    numbers = {ours: _canonical(payload, ours), theirs: _other_party(payload, theirs)}
+    if not (call_id := _printable(payload.get("id"), CALL_ID_MAX_LENGTH)):
+        raise ValueError("missing or invalid id")
+    origin_id = _printable(payload.get("originid"), CALL_ID_MAX_LENGTH)
+    return CallEvent(
+        number=numbers[ours],
+        event_type=event_type,
+        direction=direction,
+        from_number=numbers["from"],
+        to_number=numbers["to"],
+        call_id=call_id,
+        origin_id=origin_id or call_id,
+        start_time=_start_time(payload.get("start_time")),
+        duration=_duration(payload.get("duration")),
+    )
+
+
+def _required(payload: dict[str, Any], key: str) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"missing or invalid {key}")
+    return value
+
+
+def _canonical(payload: dict[str, Any], key: str) -> str:
+    try:
+        return canonical_number(_required(payload, key))
+    except ValueError:
+        raise ValueError(f"missing or invalid {key}") from None
+
+
+# Withheld and non-numeric callers still matter (a missed call from a withheld
+# number), so the other party is kept raw when it is not a phone number.
+def _other_party(payload: dict[str, Any], key: str) -> str:
+    if not (raw := _printable(payload.get(key))):
+        return UNKNOWN_PARTY
+    try:
+        number = canonical_number(raw)
+    except ValueError:
+        number = raw
+    return number[:OTHER_PARTY_MAX_LENGTH]
+
+
+def _printable(value: Any, max_length: int | None = None) -> str:
+    if not isinstance(value, str):
+        return ""
+    return "".join(ch for ch in value if ch.isprintable()).strip()[:max_length]
+
+
+def _start_time(value: Any) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.strptime(value, TEL2_TIME_FORMAT).replace(tzinfo=UTC)
+    except ValueError:
+        return None
+
+
+def _duration(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, str) and value.isdecimal() and value.isascii():
+        # Checked before int() so a huge string cannot hit the int digit limit.
+        return int(value) if len(value) <= MAX_DURATION_DIGITS else None
+    if isinstance(value, int) and 0 <= value < 10**MAX_DURATION_DIGITS:
+        return value
+    return None
 
 
 def _find(
