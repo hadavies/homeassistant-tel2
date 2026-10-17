@@ -2,6 +2,7 @@
 
 import copy
 from datetime import UTC, datetime
+from decimal import Decimal
 import json
 from typing import Any, Final
 from unittest.mock import create_autospec
@@ -23,7 +24,11 @@ from custom_components.tel2.const import (
     CONF_WEBHOOK_ID,
     CONF_WEBHOOK_SECRET,
 )
-from custom_components.tel2.diagnostics import _alias_pattern, _sanitise_tel2
+from custom_components.tel2.diagnostics import (
+    _alias_pattern,
+    _json_safe,
+    _sanitise_tel2,
+)
 from custom_components.tel2.webhook import CallEventStatus, Tel2CallEventManager
 from tests.fake_tel2 import FakeTel2Api
 from tests.fixture_loader import load_fixture
@@ -264,3 +269,27 @@ def test_sanitise_aliases_own_number_formats() -> None:
     assert _sanitise_tel2({form: form for form in forms}, aliasing) == {
         "line_1": "line_1"
     }
+
+
+def test_alias_pattern_without_own_numbers_is_none() -> None:
+    assert _alias_pattern([], {}) is None
+
+
+def test_sanitise_scrubs_inside_lists() -> None:
+    data = {"rows": [{"api_token": "abc", "note": "07700900123"}, "plain"]}
+
+    assert _sanitise_tel2(data, None) == {
+        "rows": [{"api_token": "**REDACTED**", "note": "**REDACTED**"}, "plain"]
+    }
+
+
+def test_json_safe_converts_nested_values() -> None:
+    when = datetime(2026, 10, 17, 9, 30, tzinfo=UTC)
+
+    assert _json_safe({1: (Decimal("1.50"), frozenset({when}))}) == {
+        "1": ["1.50", ["2026-10-17T09:30:00+00:00"]]
+    }
+
+
+def test_sanitise_leaves_non_string_keys_alone() -> None:
+    assert _sanitise_tel2({1: "x", "status": "1"}, None) == {1: "x", "status": "1"}

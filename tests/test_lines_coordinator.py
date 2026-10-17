@@ -8,7 +8,7 @@ import aiohttp
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import UpdateFailed
 import pytest
 from pytest_homeassistant_custom_component.common import (
@@ -256,6 +256,30 @@ async def test_lines_follow_numbers_added_to_the_account(
     await lines.async_refresh()
 
     assert set(lines.data.lines) == {LINE_1, LINE_2, LINE_3}
+
+
+async def test_account_update_before_lines_have_loaded_does_not_refresh_lines(
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    account: Tel2AccountCoordinator,
+    lines: Tel2LinesCoordinator,
+    fake_tel2: FakeTel2Api,
+) -> None:
+    entry.mock_state(hass, ConfigEntryState.SETUP_IN_PROGRESS)
+    await account.async_config_entry_first_refresh()
+    fake_tel2.respond("Get-All-Pref-Summary", "error_generic.json")
+    with pytest.raises(ConfigEntryNotReady):
+        await lines.async_config_entry_first_refresh()
+    assert lines.data is None
+    pref_calls = fake_tel2.call_count("Get-All-Pref-Summary")
+    fake_tel2.respond("Get-Numbers", "get_numbers_number_added.json")
+
+    await account.async_refresh()
+    await hass.async_block_till_done()
+
+    assert LINE_3 in account.data.numbers
+    assert lines.data is None
+    assert fake_tel2.call_count("Get-All-Pref-Summary") == pref_calls
 
 
 async def test_without_account_data_there_are_no_lines(

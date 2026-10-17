@@ -559,6 +559,23 @@ async def test_stale_registration_is_kept_when_tel2_fails(
     assert any(r.levelno == logging.WARNING for r in caplog.records)
 
 
+async def test_stale_registration_is_kept_when_the_check_after_a_refusal_fails(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    mock_config_entry_factory: Callable[..., MockConfigEntry],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    fake_tel2.respond("Delete-Webhook", "delete_webhook_rejected.json")
+    fake_tel2.respond("Get-Webhooks", aiohttp.ClientError())
+    entry = add_entry(hass, mock_config_entry_factory, tel2_webhook_id="5")
+
+    await async_delete_stale_registration(hass, entry, make_client(hass, entry))
+
+    assert entry.data[CONF_TEL2_WEBHOOK_ID] == "5"
+    assert fake_tel2.call_count("Get-Webhooks") == 1
+    assert any(r.levelno == logging.WARNING for r in caplog.records)
+
+
 async def test_stale_registration_is_kept_when_tel2_is_down(
     hass: HomeAssistant,
     fake_tel2: FakeTel2Api,

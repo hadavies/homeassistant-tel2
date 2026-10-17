@@ -113,10 +113,12 @@ async def test_account_balance(client: Tel2Client) -> None:
     "data",
     [
         {"Balance": "lots", "AvailableBalance": "10.00"},
+        {"Balance": "NaN", "AvailableBalance": "10.00"},
+        {"Balance": "12.34", "AvailableBalance": "Infinity"},
         {"AvailableBalance": "10.00"},
         "not a mapping",
     ],
-    ids=["non-numeric", "missing-field", "not-a-mapping"],
+    ids=["non-numeric", "nan", "infinite", "missing-field", "not-a-mapping"],
 )
 async def test_unreadable_balance_is_connection_error(
     client: Tel2Client, fake_tel2: FakeTel2Api, data: Any
@@ -257,6 +259,60 @@ async def test_numbers_without_a_dialable_length_are_skipped(
     numbers = await client.async_get_numbers()
 
     assert [n.canonical for n in numbers] == [LINE_1, LINE_2]
+
+
+async def test_duplicate_numbers_keep_the_first_row(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    rows = load_fixture("get_numbers.json")["Data"]
+    rows.append(rows[0] | {"ServiceName": "+44 1632 960001", "Alias": "Duplicate"})
+    fake_tel2.respond("Get-Numbers", success(rows))
+
+    numbers = await client.async_get_numbers()
+
+    assert [(n.canonical, n.name) for n in numbers] == [
+        (LINE_1, "Line 1"),
+        (LINE_2, "Line 2"),
+    ]
+
+
+async def test_line_names_with_unreadable_numbers_are_ignored(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    rows = load_fixture("get_numbers.json")["Data"]
+    for row in rows:
+        row.update({"Alias": "", "Parameter_4": ""})
+    fake_tel2.respond("Get-Numbers", success(rows))
+    fake_tel2.respond(
+        "Get-Line-Names",
+        success(
+            [
+                {"ServiceName": "+0 1632 960001", "Name": "Not a number"},
+                {"ServiceName": "", "Name": "Blank"},
+                {"ServiceName": "01632960002", "Name": "Hall"},
+            ]
+        ),
+    )
+
+    numbers = await client.async_get_numbers()
+
+    assert [(n.canonical, n.name) for n in numbers] == [
+        (LINE_1, None),
+        (LINE_2, "Hall"),
+    ]
+
+
+async def test_line_names_token_renewal_failure_propagates(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond("Get-Token", "get_token.json", "error_generic.json")
+    fake_tel2.respond("Get-Line-Names", "error_invalid_token.json")
+
+    with pytest.raises(Tel2ApiError) as err:
+        await client.async_get_numbers()
+
+    assert (err.value.action, err.value.context) == ("Get-Token", None)
+    assert fake_tel2.call_count("Get-Token") == 2
 
 
 @pytest.mark.parametrize(

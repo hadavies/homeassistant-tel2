@@ -343,6 +343,18 @@ async def test_get_token_api_error_is_not_auth(
     assert err.value.context is None
 
 
+async def test_get_token_without_data_is_api_error(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond("Get-Token", envelope("0", "No Data Found."))
+
+    with pytest.raises(Tel2ApiError) as err:
+        await client.async_authenticate()
+
+    assert not isinstance(err.value, Tel2NoData)
+    assert (err.value.action, err.value.context) == ("Get-Token", None)
+
+
 async def test_authenticate_fetches_and_reports_a_new_token(
     session: aiohttp.ClientSession, fake_tel2: FakeTel2Api
 ) -> None:

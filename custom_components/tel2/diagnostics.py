@@ -223,7 +223,9 @@ def _secret_like_keys(value: Any) -> set[str]:
     keys: set[str] = set()
     items: Iterable[Any]
     if isinstance(value, dict):
-        keys.update(key for key in value if _is_secret_like(key))
+        keys.update(
+            key for key in value if isinstance(key, str) and _is_secret_like(key)
+        )
         items = value.values()
     elif isinstance(value, list):
         items = value

@@ -148,6 +148,13 @@ async def test_numbers_without_bundle_are_absent_from_bundles(
     assert coordinator.data.bundles == {}
 
 
+async def test_account_device_id_is_unavailable_before_the_first_refresh(
+    coordinator: Tel2AccountCoordinator,
+) -> None:
+    with pytest.raises(RuntimeError):
+        _ = coordinator.account_device_id
+
+
 async def test_first_refresh_creates_account_device(
     hass: HomeAssistant, entry: MockConfigEntry, coordinator: Tel2AccountCoordinator
 ) -> None:
@@ -337,6 +344,25 @@ async def test_auth_error_wins_over_simultaneous_connection_error(
     assert isinstance(err, ConfigEntryAuthFailed)
     assert isinstance(err.__cause__, ExceptionGroup)
     assert len(err.__cause__.exceptions) == 2
+
+
+async def test_unexpected_error_during_refresh_is_not_reported_as_a_tel2_outage(
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    coordinator: Tel2AccountCoordinator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await first_refresh(hass, entry, coordinator)
+
+    async def broken() -> None:
+        raise ValueError("bug")
+
+    monkeypatch.setattr(coordinator.client, "async_get_account_balance", broken)
+
+    await coordinator.async_refresh()
+
+    assert not coordinator.last_update_success
+    assert isinstance(coordinator.last_exception, ValueError)
 
 
 async def test_auth_failure_without_message_has_fallback_text(
