@@ -1,7 +1,8 @@
 """Client for the Tel2 portal API."""
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from decimal import Decimal, InvalidOperation
 import json
 import logging
 from typing import Any, Final
@@ -9,14 +10,59 @@ from typing import Any, Final
 import aiohttp
 from yarl import URL
 
-from .const import API_URL, AUTH_ERROR_PATTERNS
-from .models import AccessContext
+from .const import (
+    API_URL,
+    AUTH_ERROR_PATTERNS,
+    PERSONAL_PREF_FIELDS,
+    PREF_FORWARD_ALWAYS_NUMBER,
+    SECRET_PREFS,
+)
+from .models import (
+    AccessContext,
+    AccountBalance,
+    BundleUsage,
+    CustomerDetails,
+    PlanSummary,
+    Tel2Number,
+    WebhookRegistration,
+)
+from .numbering import canonical_number, is_valid_destination
 
 _LOGGER = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT: Final = aiohttp.ClientTimeout(total=30)
 _HEADERS: Final = {"Content-Type": "application/json", "Accept": "application/json"}
 _GET_TOKEN: Final = "Get-Token"  # noqa: S105
+_REGISTERED: Final = "1"
+_CALLING_PLAN: Final = "CallingPlan"
+_GET_NUMBERS_PARAMS: Final = {
+    "orderby": "",
+    "orderdirection": "",
+    "searchby": "",
+    "searchterm": "",
+}
+_PROBES: Final[tuple[tuple[AccessContext, str], ...]] = (
+    ("account", "Get-Account-Balance"),
+    ("voice", "Get-Subscriber-Status"),
+    ("api", "Get-Webhooks"),
+)
+# Prefs Tel2 adds later may carry credentials the constants do not list yet.
+_SECRET_KEY_PATTERNS: Final = (
+    "password",
+    "passwd",
+    "pin",
+    "secret",
+    "token",
+    "access_code",
+)
+# External parties' numbers and addresses are personal data.
+_PERSONAL_KEY_PATTERNS: Final = ("number", "email")
+_DROPPED_PREFS: Final = (
+    SECRET_PREFS
+    | PERSONAL_PREF_FIELDS
+    | {"pref_uid", "blacklist", "do_not_disturb_forward"}
+)
+_OWN_NUMBER_PREFS: Final = frozenset({"mailbox", "voicemailmailbox"})
 
 
 class Tel2Error(Exception):
@@ -86,6 +132,149 @@ class Tel2Client:
         """Fetch a new session token and return it."""
         async with self._token_lock:
             return await self._fetch_token()
+
+    async def async_get_customer_details(self) -> CustomerDetails:
+        """Return the account holder's details."""
+        row = _first_row(await self._call_required("account", "Get-Customer-Details"))
+        return CustomerDetails(
+            account_code=_required_text(row, "Account_Code"),
+            customer_name=_text(row, "CustomerName") or "",
+            company_name=_text(row, "CompanyName"),
+            status=_text(row, "Status") or "",
+        )
+
+    async def async_get_account_balance(self) -> AccountBalance:
+        """Return the account balance in GBP."""
+        row = _first_row(await self._call_required("account", "Get-Account-Balance"))
+        return AccountBalance(
+            balance=_decimal(row, "Balance"),
+            available_balance=_decimal(row, "AvailableBalance"),
+        )
+
+    async def async_get_current_plan(self) -> PlanSummary | None:
+        """Return the calling plan, or the first plan when none is a calling plan."""
+        rows = _rows(await self._call_optional("account", "Get-Current-Plan-Summary"))
+        if not rows:
+            return None
+        row = next((r for r in rows if r.get("ServiceType") == _CALLING_PLAN), rows[0])
+        return PlanSummary(
+            alias=_text(row, "Alias") or "",
+            description=_text(row, "BillingDescription") or "",
+        )
+
+    async def async_get_numbers(self) -> list[Tel2Number]:
+        """Return the account's phone numbers, without extension-only entries."""
+        rows = _rows(
+            await self._call_optional("voice", "Get-Numbers", dict(_GET_NUMBERS_PARAMS))
+        )
+        line_names = await self._line_names()
+        numbers: dict[str, Tel2Number] = {}
+        for row in rows:
+            tel2_id = _text(row, "ServiceName")
+            if tel2_id is None or not is_valid_destination(tel2_id):
+                continue
+            canonical = canonical_number(tel2_id)
+            if canonical in numbers:
+                continue
+            numbers[canonical] = Tel2Number(
+                canonical=canonical,
+                tel2_id=str(row["ServiceName"]),
+                name=_text(row, "Alias")
+                or _text(row, "Parameter_4")
+                or line_names.get(canonical),
+                extension=_text(row, "ExtensionNumber"),
+            )
+        return list(numbers.values())
+
+    async def _line_names(self) -> dict[str, str]:
+        try:
+            data = await self._call_optional("voice", "Get-Line-Names")
+        except Tel2ApiError as err:
+            if err.context is None:
+                raise
+            return {}
+        return {
+            canonical: name
+            for row in _rows(data)
+            if (canonical := _canonical(_text(row, "ServiceName")))
+            and (name := _text(row, "Name"))
+        }
+
+    async def async_get_line_bundle_usage(
+        self, number: Tel2Number
+    ) -> BundleUsage | None:
+        """Return the number's bundle minutes, or None when it has no bundle."""
+        data = await self._call_optional(
+            "account", "Get-Line-Bundle-Usage", {"line": number.tel2_id}
+        )
+        rows = _rows(data)
+        if not rows:
+            return None
+        return BundleUsage(
+            used_minutes=_int(rows[0], "USED"), total_minutes=_int(rows[0], "TOTAL")
+        )
+
+    async def async_get_subscriber_status(self) -> frozenset[str]:
+        """Return the canonical numbers that have a registered phone."""
+        data = await self._call_optional("voice", "Get-Subscriber-Status")
+        if not isinstance(data, Mapping):
+            return frozenset()
+        return frozenset(
+            canonical
+            for raw, state in data.items()
+            if str(state) == _REGISTERED and (canonical := _canonical(str(raw)))
+        )
+
+    async def async_get_all_prefs(self) -> dict[str, dict[str, str]]:
+        """Return the non-secret prefs of every line, keyed by canonical number.
+
+        Null prefs are omitted, so an unset pref is absent from the line's dict.
+        """
+        prefs: dict[str, dict[str, str]] = {}
+        for row in _rows(await self._call_optional("voice", "Get-All-Pref-Summary")):
+            canonical = _canonical(_text(row, "pref_uid"))
+            if canonical is not None and canonical not in prefs:
+                prefs[canonical] = _public_prefs(row, canonical)
+        return prefs
+
+    async def async_get_webhooks(self) -> list[WebhookRegistration]:
+        """Return the webhooks registered on the account."""
+        webhooks: list[WebhookRegistration] = []
+        for row in _rows(await self._call_optional("api", "Get-Webhooks")):
+            fields = {str(key).lower(): value for key, value in row.items()}
+            tel2_id = _text(fields, "id")
+            if tel2_id is None:
+                continue
+            webhooks.append(
+                WebhookRegistration(
+                    tel2_id=tel2_id,
+                    name=_text(fields, "name") or "",
+                    url=_text(fields, "url") or "",
+                )
+            )
+        return webhooks
+
+    async def async_probe_access(self) -> set[AccessContext]:
+        """Return the contexts whose probe function Tel2 refused."""
+        refused: set[AccessContext] = set()
+        for context, action in _PROBES:
+            try:
+                await self._call(context, action)
+            except Tel2NoData:
+                continue
+            except Tel2ApiError as err:
+                # A Get-Token failure says nothing about any context's access.
+                if err.context is None:
+                    raise
+                refused.add(context)
+        return refused
+
+    async def _call_required(self, context: AccessContext, action: str) -> Any:
+        """Call a Tel2 action whose result cannot be empty."""
+        try:
+            return await self._call(context, action)
+        except Tel2NoData as err:
+            raise Tel2ApiError(str(err), context, action) from err
 
     async def _call(
         self,
@@ -201,3 +390,81 @@ def _parse_envelope(
     if result == "0":
         raise Tel2NoData(message)
     raise Tel2ApiError(message, context, action)
+
+
+def _rows(data: Any) -> list[Mapping[str, Any]]:
+    if isinstance(data, Mapping):
+        return [data] if data else []
+    if isinstance(data, list):
+        return [row for row in data if isinstance(row, Mapping)]
+    return []
+
+
+def _first_row(data: Any) -> Mapping[str, Any]:
+    rows = _rows(data)
+    if not rows:
+        raise Tel2ConnectionError("Tel2 returned an unexpected response")
+    return rows[0]
+
+
+def _text(row: Mapping[str, Any], key: str) -> str | None:
+    value = row.get(key)
+    if value is None or isinstance(value, Mapping | list):
+        return None
+    return str(value).strip() or None
+
+
+def _required_text(row: Mapping[str, Any], key: str) -> str:
+    value = _text(row, key)
+    if value is None:
+        raise Tel2ConnectionError(f"Tel2 response has no {key}")
+    return value
+
+
+def _decimal(row: Mapping[str, Any], key: str) -> Decimal:
+    try:
+        value = Decimal(_required_text(row, key))
+    except InvalidOperation as err:
+        raise Tel2ConnectionError(f"Tel2 {key} is not a number") from err
+    if not value.is_finite():
+        raise Tel2ConnectionError(f"Tel2 {key} is not a number")
+    return value
+
+
+def _int(row: Mapping[str, Any], key: str) -> int:
+    return int(_decimal(row, key))
+
+
+def _canonical(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    try:
+        return canonical_number(raw)
+    except ValueError:
+        return None
+
+
+def _is_private_key(key: str) -> bool:
+    lowered = key.lower()
+    if lowered == PREF_FORWARD_ALWAYS_NUMBER:
+        return False
+    return lowered in _DROPPED_PREFS or any(
+        pattern in lowered for pattern in _SECRET_KEY_PATTERNS + _PERSONAL_KEY_PATTERNS
+    )
+
+
+def _is_public_pref(key: str, value: Any, canonical: str) -> bool:
+    if value is None or isinstance(value, Mapping | list):
+        return False
+    # Checked first: "voicemailmailbox" contains "email".
+    if key.lower() in _OWN_NUMBER_PREFS:
+        return _canonical(str(value)) == canonical
+    return not _is_private_key(key)
+
+
+def _public_prefs(row: Mapping[str, Any], canonical: str) -> dict[str, str]:
+    return {
+        str(key): str(value)
+        for key, value in row.items()
+        if _is_public_pref(str(key), value, canonical)
+    }
