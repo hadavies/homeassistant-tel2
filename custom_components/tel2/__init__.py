@@ -6,8 +6,9 @@ from typing import Final
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.typing import ConfigType
 
 from .api import Tel2Client
 from .const import (
@@ -21,6 +22,7 @@ from .const import (
 )
 from .coordinator import Tel2AccountCoordinator, Tel2LinesCoordinator
 from .runtime import Tel2ConfigEntry, Tel2RuntimeData
+from .services import async_setup_services
 from .webhook import (
     Tel2CallEventManager,
     async_delete_stale_registration,
@@ -37,6 +39,14 @@ PLATFORMS: Final[list[Platform]] = [
     Platform.SWITCH,
     Platform.TEXT,
 ]
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the Tel2 actions once, whatever the number of entries."""
+    async_setup_services(hass)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: Tel2ConfigEntry) -> bool:

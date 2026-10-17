@@ -270,7 +270,7 @@ class Tel2Client:
 
     async def async_set_pref(self, number: Tel2Number, pref: str, value: str) -> None:
         """Set one pref on a number; secret prefs are refused unsent."""
-        if _is_secret_key(pref):
+        if is_secret_pref(pref):
             raise Tel2ApiError(
                 f"Refusing to send secret pref {pref} to Tel2", "voice", _SET_PREF
             )
@@ -516,7 +516,8 @@ def _canonical(raw: str | None) -> str | None:
         return None
 
 
-def _is_secret_key(key: str) -> bool:
+def is_secret_pref(key: str) -> bool:
+    """Return whether a pref holds a secret that must never be sent or shown."""
     lowered = key.lower()
     return lowered in SECRET_PREFS or any(
         pattern in lowered for pattern in _SECRET_KEY_PATTERNS
@@ -529,7 +530,7 @@ def _is_private_key(key: str) -> bool:
         return False
     return (
         lowered in _DROPPED_PREFS
-        or _is_secret_key(lowered)
+        or is_secret_pref(lowered)
         or any(pattern in lowered for pattern in _PERSONAL_KEY_PATTERNS)
     )
 
