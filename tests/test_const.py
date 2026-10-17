@@ -2,9 +2,12 @@
 
 import pytest
 
+from custom_components.tel2.api import is_auth_message
 from custom_components.tel2.const import (
+    AUTH_ERROR_PATTERNS,
     CALL_EVENT_TYPES,
     PERSONAL_PREF_FIELDS,
+    PREF_RECORDING_ENABLED,
     PREF_VALUE_OFF,
     PREF_VALUE_ON,
     SECRET_PREFS,
@@ -74,3 +77,31 @@ def test_personal_pref_fields() -> None:
 
 def test_pref_values_are_documented_strings() -> None:
     assert (PREF_VALUE_ON, PREF_VALUE_OFF) == ("1", "0")
+
+
+def test_recording_state_pref_is_the_captured_profile_flag() -> None:
+    assert PREF_RECORDING_ENABLED == "profile_recordingenabled"
+
+
+def test_auth_error_patterns_are_lower_case() -> None:
+    assert all(pattern == pattern.lower() for pattern in AUTH_ERROR_PATTERNS)
+
+
+@pytest.mark.parametrize(
+    "message",
+    ["Invalid Token Specified", "Invalid Access Level or Password Specified"],
+)
+def test_captured_auth_messages_match(message: str) -> None:
+    assert is_auth_message(message)
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "You do not have access to this function.",
+        "No Data Found.",
+        "An error occurred processing your request.",
+    ],
+)
+def test_access_refused_and_other_messages_are_not_auth(message: str) -> None:
+    assert not is_auth_message(message)

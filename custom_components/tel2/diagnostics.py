@@ -24,7 +24,7 @@ from .const import (
     PREF_DO_NOT_DISTURB,
     PREF_FORWARD_ALWAYS,
     PREF_FORWARD_ALWAYS_NUMBER,
-    PREF_RECORDING_DISABLED,
+    PREF_RECORDING_ENABLED,
     SECRET_PREFS,
     TEL2_COUNTRY_CODE,
 )
@@ -60,9 +60,9 @@ DIAGNOSTIC_PREFS: Final = (
     PREF_DO_NOT_DISTURB,
     PREF_FORWARD_ALWAYS,
     PREF_ANONYMOUS_REJECT,
-    PREF_RECORDING_DISABLED,
+    PREF_RECORDING_ENABLED,
+    "callrecording_disabled",
     "callrecording_type",
-    "profile_recordingenabled",
 )
 _SECRET_KEY_PATTERNS: Final = (
     "password",

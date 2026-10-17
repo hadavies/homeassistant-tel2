@@ -205,9 +205,10 @@ actions:
 
 ## Troubleshooting
 
-### Tel2 didn't accept that login or password
+### Tel2 didn't accept that login, password or access level
 
 - Check you can sign in to the Tel2 portal with the same login and password.
+- Tel2 can give the same answer when the login's access level is too low, so check it's set to Full under Accounts > Logins in the Tel2 portal.
 - If it worked before and has stopped, Home Assistant asks you to sign in again under Settings > Devices & services, enter the password there.
 - Signing in again has to use a login for the same Tel2 account, a login for a different account is refused.
 

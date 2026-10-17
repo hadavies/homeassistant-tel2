@@ -94,6 +94,8 @@ async def test_optional_call_returns_data_on_success(client: Tel2Client) -> None
         "NOT AUTHENTICATED",
         "Unauthorised request",
         "Unauthorized",
+        "Invalid Token Specified",
+        "Invalid Access Level or Password Specified",
     ],
 )
 async def test_auth_messages_raise_auth_error(
@@ -144,6 +146,59 @@ async def test_error_status_with_non_negative_result_is_api_error(
 
     with pytest.raises(Tel2ApiError):
         await client._call("account", "Get-Account-Balance")
+
+
+@pytest.mark.parametrize(
+    "message",
+    ["Invalid Token Specified", "Invalid Access Level or Password Specified"],
+)
+async def test_failure_status_with_result_0_and_auth_message_is_auth_error(
+    client: Tel2Client, fake_tel2: FakeTel2Api, message: str
+) -> None:
+    fake_tel2.respond("Get-Account-Balance", envelope("0", message, status="Failure"))
+
+    with pytest.raises(Tel2AuthError):
+        await client._call("account", "Get-Account-Balance")
+
+
+@pytest.mark.parametrize(
+    ("result", "status", "message"),
+    [
+        ("0", "Failure", "You do not have access to this function."),
+        ("0", "Failure", "Something went wrong"),
+        ("0", "", "No Data Found."),
+        ("1", "Failure", "Method Failed."),
+    ],
+)
+async def test_non_success_status_is_api_error_not_no_data(
+    client: Tel2Client,
+    fake_tel2: FakeTel2Api,
+    result: str,
+    status: str,
+    message: str,
+) -> None:
+    body: dict[str, Any] = {"Result": result, "Message": message}
+    if status:
+        body["Status"] = status
+    fake_tel2.respond("Get-Account-Balance", body)
+
+    with pytest.raises(Tel2ApiError) as err:
+        await client._call("account", "Get-Account-Balance")
+
+    assert err.value.message == message
+    assert not isinstance(err.value, Tel2AuthError)
+    assert fake_tel2.call_count("Get-Token") == 1
+
+
+async def test_no_data_without_a_data_field_is_no_data(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond(
+        "Get-Subscriber-Status",
+        {"Result": "0", "Status": "Success", "Message": "No Data Found."},
+    )
+
+    assert await client._call_optional("voice", "Get-Subscriber-Status") is None
 
 
 async def test_unknown_result_is_api_error(

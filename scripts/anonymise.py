@@ -12,6 +12,7 @@ from custom_components.tel2.numbering import canonical_number
 ACCOUNT_CODE_PLACEHOLDER: Final = "00000000"
 REDACTED: Final = "[REDACTED]"
 POSTCODE_PLACEHOLDER: Final = "ZZ99 9ZZ"
+TIMESTAMP_PLACEHOLDER: Final = "2026-01-01 00:00:00"
 DRAMA_RANGE_SIZE: Final = 1000
 _DRAMA_CANONICAL_PREFIX: Final = "441632960"
 _MIN_PHONE_DIGITS: Final = 9
@@ -52,6 +53,7 @@ _TRIVIAL_SECRET_VALUES: Final = frozenset(
     {"true", "false", "none", "null", "enabled", "disabled", "active", "inactive"}
 )
 _ENVELOPE_TEXT_KEYS: Final = frozenset({"message", "status", "action"})
+_SET_UP_TIME_KEYS: Final = frozenset({"stamp", "created", "datecreated"})
 SECRET_HEADER_PLACEHOLDER: Final = "X-Example-Header"  # noqa: S105
 
 
@@ -215,6 +217,12 @@ _HOSTNAME_RE: Final = re.compile(
 _SAFE_HOST_SUFFIXES: Final = ("example.com", "example.invalid")
 _DIGIT_RUN_RE: Final = re.compile(r"\d{9,}")
 _PLACEHOLDER_DIGITS_RE: Final = re.compile(r"(?:0044|44|0)?1632960\d{3}")
+_EMBEDDED_DIGITS_RE: Final = re.compile(
+    r"(?<=[A-Za-z])\d{4,}(?!\d)|(?<!\d)\d{4,}(?=[A-Za-z])"
+)
+_TIMESTAMP_RE: Final = re.compile(
+    r"\d{4}-?\d{2}-?\d{2}[T ]\d{2}:?\d{2}:?\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?"
+)
 _GENERIC_LINE_NAME_RE: Final = re.compile(r"line \d+", re.IGNORECASE)
 _POSTCODE_RE: Final = re.compile(
     r"(?<![A-Za-z0-9])[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}(?![A-Za-z0-9])", re.IGNORECASE
@@ -407,6 +415,8 @@ class Anonymiser:
             return MONEY_PLACEHOLDER
         if norm_key == "secretheader":
             return SECRET_HEADER_PLACEHOLDER
+        if norm_key in _SET_UP_TIME_KEYS:
+            return TIMESTAMP_PLACEHOLDER
         if norm_key in _ACCOUNT_KEYS:
             bounded = len(value.strip()) < _MIN_SUBSTRING_ACCOUNT_LENGTH
             self._learn(
@@ -536,7 +546,8 @@ class Anonymiser:
         text = _UK_PHONE_RE.sub(self._replace_phone, text)
         text = _INTL_PHONE_RE.sub(self._replace_phone, text)
         text = self._replace_learned(text)
-        return _HOSTNAME_RE.sub(self._replace_host, text)
+        text = _HOSTNAME_RE.sub(self._replace_host, text)
+        return _outside_timestamps(text, _zero_embedded_digits)
 
     def _scrub_key(self, key: str) -> str:
         if len(key) >= _MIN_ID_LENGTH and key in self._ids:
@@ -624,12 +635,37 @@ class Anonymiser:
             for run in _DIGIT_RUN_RE.findall(text)
         ):
             return True
+        if _outside_timestamps(text, _zero_embedded_digits) != text:
+            return True
         if any(
             _norm(postcode) != _norm(POSTCODE_PLACEHOLDER)
             for postcode in _POSTCODE_RE.findall(text)
         ):
             return True
         return _names_secret(text, exempt=exempt)
+
+
+def _zero_embedded_digits(text: str) -> str:
+    """Zero digit runs inside alphanumeric tokens, such as internal IDs in codes."""
+    return _EMBEDDED_DIGITS_RE.sub(
+        lambda match: (
+            match[0]
+            if _PLACEHOLDER_DIGITS_RE.fullmatch(match[0])
+            else "0" * len(match[0])
+        ),
+        text,
+    )
+
+
+def _outside_timestamps(text: str, replace: Callable[[str], str]) -> str:
+    """Apply replace to the parts of text that are not timestamps."""
+    parts: list[str] = []
+    end = 0
+    for match in _TIMESTAMP_RE.finditer(text):
+        parts.extend((replace(text[end : match.start()]), match[0]))
+        end = match.end()
+    parts.append(replace(text[end:]))
+    return "".join(parts)
 
 
 def _address_placeholder(norm_key: str, anchored: bool) -> str | None:

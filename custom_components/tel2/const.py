@@ -58,10 +58,10 @@ PERSONAL_PREF_FIELDS: Final = frozenset(
 )
 
 # Lower-case substrings of Tel2 error messages that mean the token or login was refused.
-# Provisional until the live capture confirms Tel2's wording.
 AUTH_ERROR_PATTERNS: Final[tuple[str, ...]] = (
-    "invalid login",
     "invalid token",
+    "invalid access level or password",
+    "invalid login",
     "login not specified",
     "token not specified",
     "invalid password",
@@ -71,7 +71,7 @@ AUTH_ERROR_PATTERNS: Final[tuple[str, ...]] = (
     "unauthorized",
 )
 
-# The API docs show pref values as "1"/"0" strings; confirm against the live capture.
+# Captured prefs are "1"/"0" strings, "" when never set.
 PREF_VALUE_ON: Final = "1"
 PREF_VALUE_OFF: Final = "0"
 
@@ -79,8 +79,8 @@ PREF_DO_NOT_DISTURB: Final = "do_not_disturb_status"
 PREF_FORWARD_ALWAYS: Final = "callforward_always_status"
 PREF_FORWARD_ALWAYS_NUMBER: Final = "callforward_always_number"
 PREF_ANONYMOUS_REJECT: Final = "anoncall_reject"
-# Provisional until the live capture: recording is on when this pref is "0".
-PREF_RECORDING_DISABLED: Final = "callrecording_disabled"
+# Provisional: confirm by toggling recording in the live test.
+PREF_RECORDING_ENABLED: Final = "profile_recordingenabled"
 
 
 class CallEventType(StrEnum):

@@ -1,0 +1,21 @@
+{
+  "Result": "1",
+  "Status": "Success",
+  "Message": "Method Executed Successfully.",
+  "Data": [
+    {
+      "ServiceName": "441632960001",
+      "Parameter_4": "Line 1",
+      "GroupID": "",
+      "ExtensionNumber": "0",
+      "LineEmail": "user1@example.com",
+      "Charge": "10.00",
+      "BillingGroup": "",
+      "Profile": "",
+      "userid": null,
+      "Parameter_2": "N",
+      "Alias": "Line 2",
+      "Parameter_5": "0"
+    }
+  ]
+}

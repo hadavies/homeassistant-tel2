@@ -212,7 +212,7 @@
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
-    'state': 'Example Plan',
+    'state': 'Example business voice plan',
   })
 # ---
 # name: test_sensors_snapshot[sensor.line_1_bundle_minutes_included-entry]

@@ -78,6 +78,52 @@ async def test_customer_details(client: Tel2Client, fake_tel2: FakeTel2Api) -> N
     assert fake_tel2.requests_for("Get-Customer-Details")[0].context == "account"
 
 
+async def test_customer_details_accept_the_documented_field_names(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond(
+        "Get-Customer-Details",
+        success(
+            {
+                "Account_Code": "00000000",
+                "CustomerName": "Example Customer",
+                "CompanyName": "Example Ltd",
+                "Status": "Active",
+            }
+        ),
+    )
+
+    assert await client.async_get_customer_details() == CustomerDetails(
+        account_code="00000000",
+        customer_name="Example Customer",
+        company_name="Example Ltd",
+        status="Active",
+    )
+
+
+async def test_customer_details_prefer_the_captured_field_names(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    data = load_fixture("get_customer_details.json")["Data"] | {
+        "Account_Code": "11111111",
+        "Status": "Closed",
+    }
+    fake_tel2.respond("Get-Customer-Details", success(data))
+
+    details = await client.async_get_customer_details()
+
+    assert (details.account_code, details.status) == ("00000000", "Active")
+
+
+async def test_customer_details_without_an_account_code_is_connection_error(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond("Get-Customer-Details", success({"CustomerName": "Example"}))
+
+    with pytest.raises(Tel2ConnectionError):
+        await client.async_get_customer_details()
+
+
 async def test_customer_details_without_company(
     client: Tel2Client, fake_tel2: FakeTel2Api
 ) -> None:
@@ -161,6 +207,35 @@ async def test_current_plan_prefers_the_calling_plan_row(
     )
 
 
+async def test_current_plan_fallback_skips_the_total_row(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond(
+        "Get-Current-Plan-Summary",
+        success(
+            [
+                {"ServiceType": "Total", "Alias": "Total", "BillingDescription": "T"},
+                {"ServiceType": "Number", "Alias": "L", "BillingDescription": "Line"},
+            ]
+        ),
+    )
+
+    assert await client.async_get_current_plan() == PlanSummary(
+        alias="L", description="Line"
+    )
+
+
+async def test_current_plan_with_only_a_total_row_is_none(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond(
+        "Get-Current-Plan-Summary",
+        success([{"ServiceType": "Total", "Alias": "Total"}]),
+    )
+
+    assert await client.async_get_current_plan() is None
+
+
 async def test_current_plan_no_data_is_none(
     client: Tel2Client, fake_tel2: FakeTel2Api
 ) -> None:
@@ -220,16 +295,56 @@ async def test_line_name_used_when_numbers_have_no_alias(
     ]
 
 
-async def test_parameter_4_used_when_alias_is_empty(
+async def test_line_name_takes_precedence_over_parameter_4_and_alias(
     client: Tel2Client, fake_tel2: FakeTel2Api
 ) -> None:
     rows = load_fixture("get_numbers.json")["Data"]
-    rows[0].update({"Alias": "", "Parameter_4": "Front desk"})
+    rows[0].update({"Alias": "Billing alias", "Parameter_4": "Front desk"})
     fake_tel2.respond("Get-Numbers", success(rows))
+    fake_tel2.respond(
+        "Get-Line-Names", success([{"ServiceName": "01632960001", "Name": "Kitchen"}])
+    )
+
+    numbers = await client.async_get_numbers()
+
+    assert numbers[0].name == "Kitchen"
+
+
+async def test_parameter_4_used_without_a_line_name(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    rows = load_fixture("get_numbers.json")["Data"]
+    rows[0].update({"Alias": "Billing alias", "Parameter_4": "Front desk"})
+    fake_tel2.respond("Get-Numbers", success(rows))
+    fake_tel2.respond("Get-Line-Names", NO_DATA)
 
     numbers = await client.async_get_numbers()
 
     assert numbers[0].name == "Front desk"
+
+
+async def test_alias_used_last(client: Tel2Client, fake_tel2: FakeTel2Api) -> None:
+    rows = load_fixture("get_numbers.json")["Data"]
+    rows[0].update({"Alias": "Billing alias", "Parameter_4": ""})
+    fake_tel2.respond("Get-Numbers", success(rows))
+    fake_tel2.respond("Get-Line-Names", NO_DATA)
+
+    numbers = await client.async_get_numbers()
+
+    assert numbers[0].name == "Billing alias"
+
+
+@pytest.mark.parametrize("extension", ["0", "", "  "])
+async def test_zero_or_blank_extension_is_none(
+    client: Tel2Client, fake_tel2: FakeTel2Api, extension: str
+) -> None:
+    rows = load_fixture("get_numbers.json")["Data"]
+    rows[0]["ExtensionNumber"] = extension
+    fake_tel2.respond("Get-Numbers", success(rows))
+
+    numbers = await client.async_get_numbers()
+
+    assert (numbers[0].extension, numbers[1].extension) == (None, "202")
 
 
 async def test_international_tel2_id_is_kept_verbatim(

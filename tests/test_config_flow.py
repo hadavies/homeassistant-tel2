@@ -339,7 +339,7 @@ async def test_reauth_wrong_account(
     reauth_entry: MockConfigEntry,
 ) -> None:
     other = load_fixture("get_customer_details.json")
-    other["Data"]["Account_Code"] = "11111111"
+    other["Data"]["AccountCode"] = "11111111"
     fake_tel2.respond("Get-Customer-Details", other)
     result = await _start_reauth(hass, reauth_entry)
 

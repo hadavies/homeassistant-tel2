@@ -118,6 +118,11 @@ def test_config_errors(strings: Any, key: str) -> None:
     assert strings["config"]["error"][key]
 
 
+def test_invalid_auth_covers_a_low_access_level(strings: Any) -> None:
+    message = strings["config"]["error"]["invalid_auth"]
+    assert all(word in message for word in ("login", "password", "access level"))
+
+
 def test_insufficient_access_placeholders(strings: Any) -> None:
     text = strings["config"]["error"]["insufficient_access"]
     assert _placeholders(text) == {"contexts", "level"}

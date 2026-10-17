@@ -10,7 +10,7 @@
       "file": "get_customer_details.json",
       "action": "Get-Customer-Details",
       "source": "synthetic",
-      "description": "Get-Customer-Details for the fictional two-line account."
+      "description": "Get-Customer-Details in the captured field names (AccountCode, CustomerStatus) for the fictional account."
     },
     {
       "file": "get_account_balance.json",
@@ -77,7 +77,7 @@
       "file": "get_all_pref_summary.json",
       "action": "Get-All-Pref-Summary",
       "source": "synthetic",
-      "description": "Get-All-Pref-Summary with every switch pref off, including fake secret and personal fields."
+      "description": "Get-All-Pref-Summary with every switch pref off (callrecording_disabled 0, as captured), including fake secret and personal fields."
     },
     {
       "file": "get_all_pref_summary_all_on.json",
@@ -89,7 +89,7 @@
       "file": "get_all_pref_summary_number_added.json",
       "action": "Get-All-Pref-Summary",
       "source": "synthetic",
-      "description": "Get-All-Pref-Summary after a third number is added, every switch pref off."
+      "description": "Get-All-Pref-Summary after a third number is added, every switch pref off (callrecording_disabled 0, as captured)."
     },
     {
       "file": "get_webhooks.json",
@@ -107,13 +107,13 @@
       "file": "error_wrong_password.json",
       "action": "Get-Token",
       "source": "synthetic",
-      "description": "Get-Token refused for a wrong password."
+      "description": "Get-Token refused for a wrong password, in the captured shape (Result 0, Status Failure)."
     },
     {
       "file": "error_invalid_token.json",
       "action": "Get-Account-Balance",
       "source": "synthetic",
-      "description": "Any action refused for an invalid or expired token."
+      "description": "Any action refused for an invalid or expired token, in the captured shape (Result 0, Status Failure)."
     },
     {
       "file": "error_access_refused_account.json",

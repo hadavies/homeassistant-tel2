@@ -7,7 +7,7 @@ from typing import Any, NamedTuple
 import aiohttp
 import pytest
 
-from custom_components.tel2.api import Tel2ApiError, Tel2Client
+from custom_components.tel2.api import Tel2ApiError, Tel2AuthError, Tel2Client
 from custom_components.tel2.const import SECRET_PREFS
 from custom_components.tel2.models import Tel2Number, WebhookSpec
 from tests.fake_tel2 import NO_DATA, FakeTel2Api
@@ -144,22 +144,48 @@ async def test_write_rejection_raises_api_error_with_tel2_message(
 
 
 @each_write
-@pytest.mark.parametrize(
-    "response", [NO_DATA, {**NO_DATA, "Status": "Failed", "Message": "Failed."}]
-)
-async def test_write_without_result_1_is_not_applied(
-    client: Tel2Client,
-    fake_tel2: FakeTel2Api,
-    case: WriteCase,
-    response: dict[str, Any],
+async def test_write_with_no_data_is_not_applied(
+    client: Tel2Client, fake_tel2: FakeTel2Api, case: WriteCase
 ) -> None:
-    fake_tel2.respond(case.action, response)
+    fake_tel2.respond(case.action, NO_DATA)
 
     with pytest.raises(Tel2ApiError, match="not applied") as err:
         await case.write(client)
 
     assert err.value.context == case.context
     assert err.value.action == case.action
+
+
+@each_write
+async def test_write_failure_raises_api_error_with_tel2_message(
+    client: Tel2Client, fake_tel2: FakeTel2Api, case: WriteCase
+) -> None:
+    fake_tel2.respond(
+        case.action, {**NO_DATA, "Status": "Failure", "Message": "Failed."}
+    )
+
+    with pytest.raises(Tel2ApiError) as err:
+        await case.write(client)
+
+    assert err.value.message == "Failed."
+    assert not isinstance(err.value, Tel2AuthError)
+    assert (err.value.context, err.value.action) == (case.context, case.action)
+
+
+@each_write
+async def test_write_with_invalid_token_renews_once_and_retries(
+    client: Tel2Client, fake_tel2: FakeTel2Api, case: WriteCase
+) -> None:
+    success = case.action.lower().replace("-", "_") + ".json"
+    fake_tel2.respond(case.action, "error_invalid_token.json", success)
+
+    await case.write(client)
+
+    assert fake_tel2.call_count("Get-Token") == 1
+    assert [r.body["token"] for r in fake_tel2.requests_for(case.action)] == [
+        "stored-token-for-tests",
+        load_fixture("get_token.json")["Data"]["token"],
+    ]
 
 
 @pytest.mark.parametrize(

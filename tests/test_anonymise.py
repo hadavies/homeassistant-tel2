@@ -607,3 +607,55 @@ def test_money_values_are_replaced(data: dict[str, Any]) -> None:
     out = _dump({"f.json": {"Data": data}})
     for value in data.values():
         assert str(value) not in out
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("Number14021InclMins", "Number00000InclMins"),
+        ("T2CallingPlan4190", "T2CallingPlan0000"),
+        ("4190Plan", "0000Plan"),
+        ("T2CallingPlan419", "T2CallingPlan419"),
+        ("Plan 14021 minutes", "Plan 14021 minutes"),
+    ],
+)
+def test_embedded_digit_runs_are_zeroed(raw: str, expected: str) -> None:
+    result = anonymise_responses({"p.json": {"Data": [{"Alias": raw}]}})
+    assert result["p.json"]["Data"][0]["Alias"] == expected
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "2026-10-16T09:15:02Z",
+        "20261016T091502Z",
+        "2026-10-16T09:15:02.123456+01:00",
+        "Line441632960001",
+        "Ext01632960001",
+    ],
+)
+def test_timestamps_and_placeholders_keep_their_digits(raw: str) -> None:
+    result = anonymise_responses({"p.json": {"Data": {"Note": raw}}})
+    assert result["p.json"]["Data"]["Note"] == raw
+
+
+def test_leak_check_flags_embedded_digit_runs() -> None:
+    paths = anonymise.Anonymiser().find_leaks(
+        {
+            "a.json": {
+                "a": "Number14021InclMins",
+                "b": "T2CallingPlan419",
+                "c": "20261016T091502Z",
+                "d": "Line441632960001",
+                "e": "4190Plan",
+            }
+        }
+    )
+    assert paths == ["a.json.a", "a.json.e"]
+
+
+@pytest.mark.parametrize("key", ["stamp", "created", "date_created", "DateCreated"])
+def test_set_up_timestamps_get_a_fixed_value(key: str) -> None:
+    result = anonymise_responses({"p.json": {"Data": {key: "2025-03-04 05:06:07"}}})
+    assert result["p.json"]["Data"][key] == anonymise.TIMESTAMP_PLACEHOLDER
+    assert anonymise.TIMESTAMP_PLACEHOLDER == "2026-01-01 00:00:00"

@@ -27,7 +27,7 @@
       }
     },
     "error": {
-      "invalid_auth": "Tel2 didn't accept that login or password",
+      "invalid_auth": "Tel2 didn't accept that login, password or access level",
       "cannot_connect": "Can't reach Tel2, check your connection and try again",
       "insufficient_access": "This login can't use {contexts}. Give it {level} access in the Tel2 portal and try again.",
       "unknown": "Something unexpected went wrong, check the logs and try again"

@@ -16,7 +16,7 @@ from .const import (
     PREF_DO_NOT_DISTURB,
     PREF_FORWARD_ALWAYS,
     PREF_FORWARD_ALWAYS_NUMBER,
-    PREF_RECORDING_DISABLED,
+    PREF_RECORDING_ENABLED,
     PREF_VALUE_OFF,
     PREF_VALUE_ON,
 )
@@ -80,10 +80,10 @@ SWITCHES: tuple[Tel2SwitchDescription, ...] = (
     Tel2SwitchDescription(
         key="call_recording",
         translation_key="call_recording",
-        pref=PREF_RECORDING_DISABLED,
-        on_value=PREF_VALUE_OFF,
-        off_value=PREF_VALUE_ON,
-        is_on_fn=_pref_is(PREF_RECORDING_DISABLED, PREF_VALUE_OFF),
+        pref=PREF_RECORDING_ENABLED,
+        on_value=PREF_VALUE_ON,
+        off_value=PREF_VALUE_OFF,
+        is_on_fn=_pref_is(PREF_RECORDING_ENABLED, PREF_VALUE_ON),
         write_fn=lambda client, number, on: client.async_set_recording(number, on),
     ),
 )

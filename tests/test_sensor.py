@@ -148,13 +148,34 @@ async def test_plan_unknown_without_a_plan(
     assert state_of(hass, f"{ACCOUNT_CODE}_account_status") == "Active"
 
 
-async def test_plan_falls_back_to_billing_description(
+async def test_plan_shows_the_billing_description(
+    hass: HomeAssistant, fake_tel2: FakeTel2Api
+) -> None:
+    await async_setup_integration(hass, fake_tel2)
+
+    assert state_of(hass, f"{ACCOUNT_CODE}_plan") == "Example business voice plan"
+
+
+async def test_plan_falls_back_to_the_alias(
     hass: HomeAssistant, fake_tel2: FakeTel2Api
 ) -> None:
     plan = copy.deepcopy(load_fixture("get_current_plan_summary.json"))
-    plan["Data"][0]["Alias"] = ""
+    plan["Data"][0]["BillingDescription"] = ""
     fake_tel2.respond("Get-Current-Plan-Summary", plan)
 
     await async_setup_integration(hass, fake_tel2)
 
-    assert state_of(hass, f"{ACCOUNT_CODE}_plan") == "Example business voice plan"
+    assert state_of(hass, f"{ACCOUNT_CODE}_plan") == "Example Plan"
+
+
+async def test_plan_unknown_when_alias_and_description_are_blank(
+    hass: HomeAssistant, fake_tel2: FakeTel2Api
+) -> None:
+    plan = copy.deepcopy(load_fixture("get_current_plan_summary.json"))
+    plan["Data"][0]["Alias"] = ""
+    plan["Data"][0]["BillingDescription"] = ""
+    fake_tel2.respond("Get-Current-Plan-Summary", plan)
+
+    await async_setup_integration(hass, fake_tel2)
+
+    assert state_of(hass, f"{ACCOUNT_CODE}_plan") == STATE_UNKNOWN

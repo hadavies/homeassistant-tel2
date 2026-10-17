@@ -34,8 +34,11 @@ _LOGGER = logging.getLogger(__name__)
 REQUEST_TIMEOUT: Final = aiohttp.ClientTimeout(total=30)
 _HEADERS: Final = {"Content-Type": "application/json", "Accept": "application/json"}
 _GET_TOKEN: Final = "Get-Token"  # noqa: S105
+_SUCCESS: Final = "Success"
 _REGISTERED: Final = "1"
 _CALLING_PLAN: Final = "CallingPlan"
+_PLAN_TOTAL: Final = "Total"
+_NO_EXTENSION: Final = "0"
 _GET_NUMBERS_PARAMS: Final = {
     "orderby": "",
     "orderdirection": "",
@@ -150,11 +153,14 @@ class Tel2Client:
     async def async_get_customer_details(self) -> CustomerDetails:
         """Return the account holder's details."""
         row = _first_row(await self._call_required("account", "Get-Customer-Details"))
+        account_code = _text(row, "AccountCode") or _text(row, "Account_Code")
+        if account_code is None:
+            raise Tel2ConnectionError("Tel2 response has no AccountCode")
         return CustomerDetails(
-            account_code=_required_text(row, "Account_Code"),
+            account_code=account_code,
             customer_name=_text(row, "CustomerName") or "",
             company_name=_text(row, "CompanyName"),
-            status=_text(row, "Status") or "",
+            status=_text(row, "CustomerStatus") or _text(row, "Status") or "",
         )
 
     async def async_get_account_balance(self) -> AccountBalance:
@@ -167,7 +173,13 @@ class Tel2Client:
 
     async def async_get_current_plan(self) -> PlanSummary | None:
         """Return the calling plan, or the first plan when none is a calling plan."""
-        rows = _rows(await self._call_optional("account", "Get-Current-Plan-Summary"))
+        rows = [
+            row
+            for row in _rows(
+                await self._call_optional("account", "Get-Current-Plan-Summary")
+            )
+            if row.get("ServiceType") != _PLAN_TOTAL
+        ]
         if not rows:
             return None
         row = next((r for r in rows if r.get("ServiceType") == _CALLING_PLAN), rows[0])
@@ -193,10 +205,10 @@ class Tel2Client:
             numbers[canonical] = Tel2Number(
                 canonical=canonical,
                 tel2_id=str(row["ServiceName"]),
-                name=_text(row, "Alias")
+                name=line_names.get(canonical)
                 or _text(row, "Parameter_4")
-                or line_names.get(canonical),
-                extension=_text(row, "ExtensionNumber"),
+                or _text(row, "Alias"),
+                extension=_extension(row),
             )
         return list(numbers.values())
 
@@ -453,14 +465,13 @@ def _parse_envelope(
         raise Tel2ConnectionError(f"Tel2 {action} returned an unexpected response")
     result = str(envelope["Result"])
     message = str(envelope.get("Message") or "")
-    if result == "-1" or envelope.get("Status") == "Error":
-        if is_auth_message(message):
-            raise Tel2AuthError(message)
-        raise Tel2ApiError(message, context, action)
-    if result == "1":
-        return envelope.get("Data")
-    if result == "0":
-        raise Tel2NoData(message)
+    if envelope.get("Status") == _SUCCESS:
+        if result == "1":
+            return envelope.get("Data")
+        if result == "0":
+            raise Tel2NoData(message)
+    if is_auth_message(message):
+        raise Tel2AuthError(message)
     raise Tel2ApiError(message, context, action)
 
 
@@ -484,6 +495,11 @@ def _text(row: Mapping[str, Any], key: str) -> str | None:
     if value is None or isinstance(value, Mapping | list):
         return None
     return str(value).strip() or None
+
+
+def _extension(row: Mapping[str, Any]) -> str | None:
+    extension = _text(row, "ExtensionNumber")
+    return None if extension == _NO_EXTENSION else extension
 
 
 def _required_text(row: Mapping[str, Any], key: str) -> str:

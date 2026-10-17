@@ -61,7 +61,7 @@ ACCOUNT_SENSORS: tuple[Tel2AccountSensorDescription, ...] = (
         key="plan",
         translation_key="plan",
         value_fn=lambda state: (
-            (state.plan.alias or state.plan.description or None) if state.plan else None
+            (state.plan.description or state.plan.alias or None) if state.plan else None
         ),
     ),
     Tel2AccountSensorDescription(

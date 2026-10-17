@@ -21,8 +21,10 @@ from custom_components.tel2.const import (
     TEL2_IGNORED_STATES,
     TEL2_STATE_MAP,
 )
+from scripts.anonymise import TIMESTAMP_PLACEHOLDER, Anonymiser
 from tests import fixture_loader
 from tests.fixture_loader import (
+    CAPTURED_DIR,
     FIXTURES_DIR,
     TEST_ENTRY_ID,
     load_captured,
@@ -31,6 +33,7 @@ from tests.fixture_loader import (
 
 SUCCESS_MESSAGE = "Method Executed Successfully."
 NO_DATA_MESSAGE = "No Data Found."
+ENVELOPE_KEYS = {"Result", "Status", "Message", "Data"}
 
 REQUIRED_API_FIXTURES = {
     "get_token.json",
@@ -157,15 +160,18 @@ def test_api_fixtures_use_the_documented_envelope() -> None:
         if "action" not in entry:
             continue
         for envelope in _envelopes(entry["file"]):
-            assert set(envelope) == {"Result", "Status", "Message", "Data"}
-            match envelope["Result"]:
-                case "1":
+            assert {"Result", "Status", "Message"} <= set(envelope) <= ENVELOPE_KEYS
+            match envelope["Result"], envelope["Status"]:
+                case "1", _:
                     assert envelope["Status"] == "Success"
                     assert envelope["Message"] == SUCCESS_MESSAGE
-                case "0":
-                    assert envelope["Status"] == "Success"
+                case "0", "Success":
                     assert envelope["Message"] == NO_DATA_MESSAGE
-                case "-1":
+                case "0", _:
+                    assert envelope["Status"] == "Failure"
+                    assert entry["file"].startswith("error_")
+                    assert envelope["Message"]
+                case "-1", _:
                     assert envelope["Status"] == "Error"
                     assert envelope["Message"]
                 case other:
@@ -198,6 +204,13 @@ def test_access_refused_and_generic_errors_are_not_auth_errors() -> None:
         envelope = _synthetic(name)
         assert envelope["Result"] == "-1"
         assert envelope["Message"] not in auth_messages
+
+
+def test_auth_errors_use_the_captured_failure_shape() -> None:
+    for name in ("error_wrong_password.json", "error_invalid_token.json"):
+        captured = load_captured(name)
+        assert captured is None or _synthetic(name) == captured
+        assert _synthetic(name)["Status"] == "Failure"
 
 
 def test_bundle_usage_has_a_bundle_line_and_a_no_data_line() -> None:
@@ -254,6 +267,7 @@ def test_pref_variants_switch_states() -> None:
     for row in off_rows:
         assert {row[pref] for pref in switches} == {PREF_VALUE_OFF}
         assert row["profile_recordingenabled"] == PREF_VALUE_OFF
+        assert row["callrecording_disabled"] == PREF_VALUE_OFF
         assert row[PREF_FORWARD_ALWAYS_NUMBER] is None
     for row in on_rows:
         assert {row[pref] for pref in switches} == {PREF_VALUE_ON}
@@ -333,6 +347,26 @@ def test_no_fixture_contains_a_number_outside_the_drama_ranges() -> None:
 )
 def test_unexpected_numbers(text: str, expected: list[str]) -> None:
     assert unexpected_numbers(text) == expected
+
+
+def _captured_files() -> dict[str, Any]:
+    captured = {
+        path.name: json.loads(path.read_text(encoding="utf-8"))
+        for path in sorted(CAPTURED_DIR.glob("*.json"))
+        if path.name != "index.json"
+    }
+    if not captured:
+        pytest.skip("No captured fixtures")
+    return captured
+
+
+def test_captured_fixtures_pass_the_anonymiser_leak_check() -> None:
+    assert Anonymiser().find_leaks(_captured_files()) == []
+
+
+def test_captured_set_up_timestamp_is_the_placeholder() -> None:
+    rows = _captured_files()["get_all_pref_summary.json"]["Data"]
+    assert {row["stamp"] for row in rows} == {TIMESTAMP_PLACEHOLDER}
 
 
 def test_no_dashes_in_fixtures() -> None:
