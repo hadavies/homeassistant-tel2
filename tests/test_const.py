@@ -99,6 +99,10 @@ def test_captured_auth_messages_match(message: str) -> None:
     "message",
     [
         "You do not have access to this function.",
+        "Unauthorised: function disabled for this account.",
+        "Unauthorised destination number.",
+        "Unauthorized request.",
+        "Not authenticated for this function.",
         "No Data Found.",
         "An error occurred processing your request.",
     ],

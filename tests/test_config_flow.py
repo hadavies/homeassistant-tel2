@@ -147,6 +147,26 @@ async def test_user_insufficient_access(
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
+async def test_user_unauthorised_probe_reports_access(
+    hass: HomeAssistant, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond(
+        "Get-Webhooks",
+        {
+            "Result": "-1",
+            "Status": "Error",
+            "Message": "Unauthorised: function disabled for this account.",
+            "Data": [],
+        },
+    )
+    result = await _start(hass)
+
+    result = await _submit(hass, result["flow_id"])
+
+    assert result["errors"] == {"base": "insufficient_access"}
+    assert result["description_placeholders"]["contexts"] == "API"
+
+
 async def test_user_customer_details_refused_reports_access(
     hass: HomeAssistant, fake_tel2: FakeTel2Api
 ) -> None:

@@ -161,10 +161,20 @@ async def test_account_balance(client: Tel2Client) -> None:
         {"Balance": "lots", "AvailableBalance": "10.00"},
         {"Balance": "NaN", "AvailableBalance": "10.00"},
         {"Balance": "12.34", "AvailableBalance": "Infinity"},
+        {"Balance": "1E1000000", "AvailableBalance": "10.00"},
+        {"Balance": "12.34", "AvailableBalance": "1E-1000000"},
         {"AvailableBalance": "10.00"},
         "not a mapping",
     ],
-    ids=["non-numeric", "nan", "infinite", "missing-field", "not-a-mapping"],
+    ids=[
+        "non-numeric",
+        "nan",
+        "infinite",
+        "huge",
+        "tiny",
+        "missing-field",
+        "not-a-mapping",
+    ],
 )
 async def test_unreadable_balance_is_connection_error(
     client: Tel2Client, fake_tel2: FakeTel2Api, data: Any
@@ -489,6 +499,30 @@ async def test_bundle_usage_for_a_line_with_a_bundle(
     (request,) = fake_tel2.requests_for("Get-Line-Bundle-Usage")
     assert request.context == "account"
     assert request.params == {"line": "01632960001"}
+
+
+async def test_bundle_usage_with_a_huge_exponent_is_connection_error(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond(
+        "Get-Line-Bundle-Usage", success([{"USED": "1E1000000", "TOTAL": "1000"}])
+    )
+
+    with pytest.raises(Tel2ConnectionError):
+        await client.async_get_line_bundle_usage(number(LINE_1, "01632960001"))
+
+
+async def test_zero_with_many_places_is_a_number(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond(
+        "Get-Account-Balance",
+        success({"Balance": "0.00000000000000", "AvailableBalance": "0E-20"}),
+    )
+
+    balance = await client.async_get_account_balance()
+
+    assert balance == AccountBalance(balance=Decimal(0), available_balance=Decimal(0))
 
 
 async def test_bundle_usage_without_a_bundle_is_none(client: Tel2Client) -> None:

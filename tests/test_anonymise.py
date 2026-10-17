@@ -9,6 +9,7 @@ import pytest
 from custom_components.tel2.const import SECRET_PREFS
 from scripts import anonymise
 from scripts.anonymise import anonymise_responses
+from tests.fixture_loader import CAPTURED_DIR
 
 NUMBER_A_NATIONAL = "01134960847"
 NUMBER_A_INTERNATIONAL = "441134960847"
@@ -441,15 +442,21 @@ def test_plan_and_non_address_fields_are_kept() -> None:
     assert anonymise_responses({"plan.json": data}) == {"plan.json": data}
 
 
-def test_webhook_name_is_kept() -> None:
+def test_webhook_names_are_replaced_and_ours_stays_recognisable() -> None:
     result = anonymise_responses(
         {
             "w.json": {
-                "Data": [{"name": "Home Assistant", "phonenumber": "441134960847"}]
+                "Data": [
+                    {"id": "9", "name": "Jane Smith mobile app", "url": URLS[0]},
+                    {"id": "10", "name": "homeassistant-tel2-01K7EXAMPLE", "url": ""},
+                ]
             }
         }
     )
-    assert result["w.json"]["Data"][0]["name"] == "Home Assistant"
+    rows = result["w.json"]["Data"]
+    assert rows[0]["name"] == "Example webhook"
+    assert rows[1]["name"] == "homeassistant-tel2-example-entry"
+    assert "Smith" not in json.dumps(result)
 
 
 def test_unscrubbable_digit_run_fails_closed_without_the_value() -> None:
@@ -480,12 +487,12 @@ def test_leak_check_flags_learned_values_and_secret_names() -> None:
 def test_short_numeric_secret_does_not_touch_decimals() -> None:
     result = anonymise_responses(
         {
-            "p.json": {"voicemail_pin": "0000", "Note": "pin 0000"},
+            "p.json": {"voicemail_pin": "0000", "Message": "pin 0000"},
             "b.json": {"Rate": "10.0000"},
         }
     )
     assert result["b.json"]["Rate"] == "10.0000"
-    assert result["p.json"]["Note"] == "pin [REDACTED]"
+    assert result["p.json"]["Message"] == "pin [REDACTED]"
 
 
 def test_address_field_without_an_anchor_is_replaced() -> None:
@@ -519,8 +526,8 @@ def test_prefixed_postcode_field_is_replaced() -> None:
 
 def test_postcode_in_free_text_fails_closed_without_the_value() -> None:
     with pytest.raises(anonymise.LeakError) as exc:
-        anonymise_responses({"f.json": {"Data": {"Note": "Ship to ZZ1 1ZZ"}}})
-    assert exc.value.paths == ["f.json.Data.Note"]
+        anonymise_responses({"f.json": {"Data": {"Message": "Ship to ZZ1 1ZZ"}}})
+    assert exc.value.paths == ["f.json.Data.Message"]
     assert "ZZ1" not in str(exc.value)
 
 
@@ -562,7 +569,7 @@ def test_nested_secret_header_value_is_replaced() -> None:
         {"w.json": {"Data": [{"name": "HA", "secretheader": "X-Tel2-Secret"}]}}
     )
     assert result["w.json"]["Data"] == [
-        {"name": "HA", "secretheader": "X-Example-Header"}
+        {"name": "Example webhook", "secretheader": "X-Example-Header"}
     ]
 
 
@@ -625,18 +632,23 @@ def test_embedded_digit_runs_are_zeroed(raw: str, expected: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "raw",
+    ("raw", "expected"),
     [
-        "2026-10-16T09:15:02Z",
-        "20261016T091502Z",
-        "2026-10-16T09:15:02.123456+01:00",
-        "Line441632960001",
-        "Ext01632960001",
+        ("2026-10-16T09:15:02Z", "2026-01-01T09:15:02Z"),
+        ("20261016T091502Z", "20260101T091502Z"),
+        ("2026-10-16T09:15:02.123456+01:00", "2026-01-01T09:15:02.123456+01:00"),
+        ("2025-03-04 10:11:12", "2026-01-01 10:11:12"),
+        ("17/05/1980", "01/01/2026"),
+        ("1980-05-17", "2026-01-01"),
+        ("Line441632960001", "Line441632960001"),
+        ("Ext01632960001", "Ext01632960001"),
     ],
 )
-def test_timestamps_and_placeholders_keep_their_digits(raw: str) -> None:
+def test_timestamps_keep_their_time_and_get_a_fixed_date(
+    raw: str, expected: str
+) -> None:
     result = anonymise_responses({"p.json": {"Data": {"Note": raw}}})
-    assert result["p.json"]["Data"]["Note"] == raw
+    assert result["p.json"]["Data"]["Note"] == expected
 
 
 def test_leak_check_flags_embedded_digit_runs() -> None:
@@ -645,7 +657,7 @@ def test_leak_check_flags_embedded_digit_runs() -> None:
             "a.json": {
                 "a": "Number14021InclMins",
                 "b": "T2CallingPlan419",
-                "c": "20261016T091502Z",
+                "c": "20260101T091502Z",
                 "d": "Line441632960001",
                 "e": "4190Plan",
             }
@@ -659,3 +671,190 @@ def test_set_up_timestamps_get_a_fixed_value(key: str) -> None:
     result = anonymise_responses({"p.json": {"Data": {key: "2025-03-04 05:06:07"}}})
     assert result["p.json"]["Data"][key] == anonymise.TIMESTAMP_PLACEHOLDER
     assert anonymise.TIMESTAMP_PLACEHOLDER == "2026-01-01 00:00:00"
+
+
+@pytest.mark.parametrize("key", ["DOB", "DateOfBirth", "date_of_birth", "BirthDate"])
+def test_birth_dates_are_replaced(key: str) -> None:
+    result = anonymise_responses({"c.json": {"Data": {key: "1980-05-17"}}})
+    assert result["c.json"]["Data"][key] == anonymise.REDACTED
+
+
+def test_additional_details_are_replaced_unless_empty() -> None:
+    result = anonymise_responses(
+        {
+            "a.json": {"Data": {"AdditionalDetails": '[{"spouse":"Jane Smith"}]'}},
+            "b.json": {"Data": {"AdditionalDetails": '[{"spouse":"Jane"}]'}},
+            "c.json": {"Data": {"AdditionalDetails": "[{}]"}},
+            "d.json": {"Data": {"AdditionalDetails": "Jane"}},
+            "e.json": {"Data": {"AdditionalDetails": '["", null, "Jane"]'}},
+        }
+    )
+    assert "Jane" not in json.dumps(result)
+    assert result["a.json"]["Data"]["AdditionalDetails"] == anonymise.REDACTED
+    assert result["c.json"]["Data"]["AdditionalDetails"] == "[{}]"
+    assert result["e.json"]["Data"]["AdditionalDetails"] == anonymise.REDACTED
+
+
+def test_json_in_a_string_is_anonymised_and_kept_compact() -> None:
+    result = anonymise_responses(
+        {
+            "s.json": {
+                "Data": {
+                    "Settings": json.dumps(
+                        {
+                            "spouse": "Jane Smith",
+                            "forward": NUMBER_B_NATIONAL,
+                            "enabled": "1",
+                        }
+                    )
+                }
+            }
+        }
+    )
+    settings = result["s.json"]["Data"]["Settings"]
+    assert " " not in settings
+    parsed = json.loads(settings)
+    assert parsed["spouse"] == anonymise.REDACTED
+    assert re.fullmatch(r"07700900\d{3}|01632960\d{3}", parsed["forward"])
+    assert parsed["enabled"] == "1"
+
+
+def test_json_in_a_string_naming_a_secret_is_dropped() -> None:
+    result = anonymise_responses(
+        {
+            "s.json": {
+                "Data": {
+                    "Extra": '{"pref":"voicemail_pin","value":"8642"}',
+                    "Status": "1",
+                }
+            }
+        }
+    )
+    assert result["s.json"]["Data"] == {"Status": "1"}
+    assert "8642" not in json.dumps(result)
+
+
+def test_number_billing_group_and_profile_are_replaced() -> None:
+    result = anonymise_responses(
+        {
+            "n.json": {
+                "Data": [
+                    {
+                        "ServiceName": NUMBER_B_NATIONAL,
+                        "BillingGroup": "Smith Family",
+                        "Profile": "Bob Jones",
+                    },
+                    {
+                        "ServiceName": NUMBER_A_NATIONAL,
+                        "BillingGroup": "",
+                        "Profile": "",
+                    },
+                ]
+            }
+        }
+    )
+    rows = result["n.json"]["Data"]
+    assert (rows[0]["BillingGroup"], rows[0]["Profile"]) == (
+        "Example Group",
+        "Example Profile",
+    )
+    assert (rows[1]["BillingGroup"], rows[1]["Profile"]) == ("", "")
+
+
+def test_mail_fields_keep_flags_and_addresses_but_not_free_text() -> None:
+    result = anonymise_responses(
+        {
+            "p.json": {
+                "Data": [
+                    {
+                        "pref_uid": NUMBER_A_INTERNATIONAL,
+                        "voicemail_emailcopy": "jane",
+                        "voicemail_disable": "0",
+                        "sendvoicemail": "no",
+                        "email": f"{NUMBER_A_INTERNATIONAL}@voip",
+                        "mailbox": NUMBER_A_INTERNATIONAL,
+                        "missed_call_email": EMAILS[0],
+                        "copy_emails": f"{EMAILS[0]}, jane",
+                    }
+                ]
+            }
+        }
+    )
+    row = result["p.json"]["Data"][0]
+    assert row["voicemail_emailcopy"] == anonymise.REDACTED
+    assert row["voicemail_disable"] == "0"
+    assert row["sendvoicemail"] == "no"
+    assert re.fullmatch(r"441632960\d{3}@voip", row["email"])
+    assert re.fullmatch(r"441632960\d{3}", row["mailbox"])
+    assert re.fullmatch(r"user\d+@example\.com", row["missed_call_email"])
+    assert row["copy_emails"] == anonymise.REDACTED
+    assert "jane" not in json.dumps(result)
+
+
+def test_free_text_outside_known_fields_is_replaced() -> None:
+    result = anonymise_responses(
+        {
+            "f.json": {
+                "Data": {
+                    "Note": "Jane Smith",
+                    "Greeting": "Hello there",
+                    "BillingDescription": "Free Trial Line - 60 mins calling to UK",
+                    "Country": "United Kingdom",
+                    "Forward": "0161 496 0999",
+                    "Seen": "2025-03-04 10:11:12",
+                    "tz": "london",
+                }
+            }
+        }
+    )
+    data = result["f.json"]["Data"]
+    assert data["Note"] == anonymise.REDACTED
+    assert data["Greeting"] == anonymise.REDACTED
+    assert data["BillingDescription"] == "Free Trial Line - 60 mins calling to UK"
+    assert data["Country"] == "United Kingdom"
+    assert re.fullmatch(r"01632960\d{3}", data["Forward"])
+    assert data["Seen"] == "2026-01-01 10:11:12"
+    assert data["tz"] == "london"
+
+
+def test_leak_check_flags_dates_except_the_placeholders() -> None:
+    paths = anonymise.Anonymiser().find_leaks(
+        {
+            "a.json": {
+                "a": "1980-05-17",
+                "b": "17/05/1980",
+                "c": anonymise.TIMESTAMP_PLACEHOLDER,
+                "d": "01/01/2026",
+                "e": "2026-01-01T09:15:02Z",
+                "f": "19800517T101112",
+            }
+        }
+    )
+    assert paths == ["a.json.a", "a.json.b", "a.json.f"]
+
+
+def test_leak_check_flags_free_text_outside_known_fields() -> None:
+    paths = anonymise.Anonymiser().find_leaks(
+        {
+            "a.json": {
+                "Note": "Jane Smith",
+                "Message": "Invalid token",
+                "CustomerName": "Example Customer",
+                "Name": "Line 2",
+                "Seen": "2026-01-01 09:15:02",
+                "Nested": '{"Note":"Jane Smith","ok":"1"}',
+                "List": ["fine", "Bob Jones"],
+            }
+        }
+    )
+    assert paths == ["a.json.Note", "a.json.Nested<json>.Note", "a.json.List[1]"]
+
+
+def test_committed_captured_fixtures_are_unchanged_by_a_rerun() -> None:
+    files = {
+        path.name: json.loads(path.read_text(encoding="utf-8"))
+        for path in sorted(CAPTURED_DIR.glob("*.json"))
+        if path.name != "index.json"
+    }
+    assert files
+    assert anonymise_responses(files) == files

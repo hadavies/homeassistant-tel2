@@ -66,9 +66,6 @@ AUTH_ERROR_PATTERNS: Final[tuple[str, ...]] = (
     "token not specified",
     "invalid password",
     "token expired",
-    "not authenticated",
-    "unauthorised",
-    "unauthorized",
 )
 
 # Captured prefs are "1"/"0" strings, "" when never set.

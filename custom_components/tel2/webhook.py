@@ -305,9 +305,11 @@ class Tel2CallEventManager:
         received = request.headers.get(SECRET_HEADER)
         if not isinstance(expected, str) or not expected or received is None:
             return False
-        return hmac.compare_digest(
-            received.encode("utf-8", "surrogateescape"), expected.encode()
-        )
+        try:
+            encoded = received.encode("utf-8", "surrogateescape")
+        except UnicodeError:
+            return False
+        return hmac.compare_digest(encoded, expected.encode())
 
     def _handle_payload(self, payload: Any) -> None:
         state = payload.get("state") if isinstance(payload, dict) else None
@@ -462,14 +464,22 @@ async def async_remove_registration(
     hass: HomeAssistant, entry: Tel2ConfigEntry, client: Tel2Client
 ) -> None:
     """Delete the Tel2 registration and the cloudhook of a removed entry."""
-    if (tel2_id := entry.data.get(CONF_TEL2_WEBHOOK_ID)) is not None:
-        try:
-            await client.async_delete_webhook(str(tel2_id))
-        except Tel2Error as err:
-            _LOGGER.warning(
-                "Could not delete the Tel2 call event registration; it may remain on the Tel2 account: %s",
-                err,
+    tel2_id = entry.data.get(CONF_TEL2_WEBHOOK_ID)
+    try:
+        # Add-Webhook can succeed without its id ever being stored.
+        if tel2_id is None and (
+            found := _find(
+                await client.async_get_webhooks(), None, registration_name(entry)
             )
+        ):
+            tel2_id = found.tel2_id
+        if tel2_id is not None:
+            await client.async_delete_webhook(str(tel2_id))
+    except Tel2Error as err:
+        _LOGGER.warning(
+            "Could not delete the Tel2 call event registration; it may remain on the Tel2 account: %s",
+            err,
+        )
     if CONF_CLOUDHOOK_URL in entry.data and _cloud_loaded(hass):
         from homeassistant.components import cloud  # noqa: PLC0415
 

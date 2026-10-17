@@ -12,6 +12,7 @@ from homeassistant.core import (
 )
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv, device_registry as dr
+from homeassistant.helpers.service import async_register_admin_service
 import probatio
 
 from .api import Tel2ApiError, Tel2Error, is_secret_pref
@@ -61,7 +62,8 @@ def async_setup_services(hass: HomeAssistant) -> None:
             ) from err
         await runtime.lines.async_request_refresh()
 
-    hass.services.async_register(
+    async_register_admin_service(
+        hass,
         DOMAIN,
         SERVICE_SET_LINE_SETTING,
         async_set_line_setting,

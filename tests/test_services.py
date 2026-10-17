@@ -4,9 +4,14 @@ from typing import Any
 from unittest.mock import patch
 
 import aiohttp
+from homeassistant.auth.models import User
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.core import Context, HomeAssistant
+from homeassistant.exceptions import (
+    HomeAssistantError,
+    ServiceValidationError,
+    Unauthorized,
+)
 from homeassistant.helpers import device_registry as dr
 import probatio
 import pytest
@@ -42,8 +47,12 @@ def device_id_for(hass: HomeAssistant, identifier: str) -> str:
     return device.id
 
 
-async def set_line_setting(hass: HomeAssistant, **data: Any) -> None:
-    await hass.services.async_call(DOMAIN, SERVICE, data, blocking=True)
+async def set_line_setting(
+    hass: HomeAssistant, *, context: Context | None = None, **data: Any
+) -> None:
+    await hass.services.async_call(
+        DOMAIN, SERVICE, data, blocking=True, context=context
+    )
 
 
 async def test_sets_pref_and_refreshes_lines(
@@ -69,6 +78,39 @@ async def test_sets_pref_and_refreshes_lines(
         "value": "1",
     }
     assert fake_tel2.call_count(PREF_SUMMARY) > refreshes
+
+
+async def test_non_admin_is_refused_unsent(
+    hass: HomeAssistant, fake_tel2: FakeTel2Api, hass_read_only_user: User
+) -> None:
+    await async_setup_integration(hass, fake_tel2)
+
+    with pytest.raises(Unauthorized):
+        await set_line_setting(
+            hass,
+            context=Context(user_id=hass_read_only_user.id),
+            device_id=device_id_for(hass, LINE_1),
+            pref="do_not_disturb_status",
+            value="1",
+        )
+
+    assert fake_tel2.call_count(SET_PREF) == 0
+
+
+async def test_admin_can_set_pref(
+    hass: HomeAssistant, fake_tel2: FakeTel2Api, hass_admin_user: User
+) -> None:
+    await async_setup_integration(hass, fake_tel2)
+
+    await set_line_setting(
+        hass,
+        context=Context(user_id=hass_admin_user.id),
+        device_id=device_id_for(hass, LINE_1),
+        pref="do_not_disturb_status",
+        value="1",
+    )
+
+    assert fake_tel2.call_count(SET_PREF) == 1
 
 
 @pytest.mark.parametrize("pref", ["voicemail_pin", "remote_access_pin", "Password"])

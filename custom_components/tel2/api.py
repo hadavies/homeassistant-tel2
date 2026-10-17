@@ -38,6 +38,7 @@ _SUCCESS: Final = "Success"
 _REGISTERED: Final = "1"
 _CALLING_PLAN: Final = "CallingPlan"
 _PLAN_TOTAL: Final = "Total"
+_MAX_MAGNITUDE: Final = 12
 _NO_EXTENSION: Final = "0"
 _GET_NUMBERS_PARAMS: Final = {
     "orderby": "",
@@ -470,7 +471,7 @@ def _parse_envelope(
             return envelope.get("Data")
         if result == "0":
             raise Tel2NoData(message)
-    if is_auth_message(message):
+    elif is_auth_message(message):
         raise Tel2AuthError(message)
     raise Tel2ApiError(message, context, action)
 
@@ -514,7 +515,8 @@ def _decimal(row: Mapping[str, Any], key: str) -> Decimal:
         value = Decimal(_required_text(row, key))
     except InvalidOperation as err:
         raise Tel2ConnectionError(f"Tel2 {key} is not a number") from err
-    if not value.is_finite():
+    # A huge exponent would make int() run for seconds on the event loop.
+    if not value.is_finite() or (value and abs(value.adjusted()) > _MAX_MAGNITUDE):
         raise Tel2ConnectionError(f"Tel2 {key} is not a number")
     return value
 

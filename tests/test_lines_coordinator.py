@@ -6,7 +6,7 @@ from typing import Any
 
 import aiohttp
 from freezegun.api import FrozenDateTimeFactory
-from homeassistant.config_entries import ConfigEntryState
+from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import UpdateFailed
@@ -378,6 +378,33 @@ async def test_auth_failure_during_refresh_is_auth_failed(
 
     assert not loaded.last_update_success
     assert isinstance(loaded.last_exception, ConfigEntryAuthFailed)
+
+
+async def test_unauthorised_function_is_update_failed_not_reauth(
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    loaded: Tel2LinesCoordinator,
+    fake_tel2: FakeTel2Api,
+) -> None:
+    fake_tel2.respond(
+        "Get-All-Pref-Summary",
+        {
+            "Result": "-1",
+            "Status": "Error",
+            "Message": "Unauthorised: function disabled for this account.",
+            "Data": [],
+        },
+    )
+    tokens = fake_tel2.call_count("Get-Token")
+
+    await loaded.async_refresh()
+    await hass.async_block_till_done()
+
+    err = loaded.last_exception
+    assert isinstance(err, UpdateFailed)
+    assert err.translation_key == "update_tel2_error"
+    assert not list(entry.async_get_active_flows(hass, {SOURCE_REAUTH}))
+    assert fake_tel2.call_count("Get-Token") == tokens
 
 
 @pytest.mark.parametrize(

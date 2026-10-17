@@ -641,6 +641,61 @@ async def test_remove_registration_deletes_on_tel2_and_the_cloudhook(
     cloud.delete.assert_awaited_once_with(hass, WEBHOOK_ID)
 
 
+async def test_remove_registration_without_a_stored_id_deletes_ours_by_name(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    mock_config_entry_factory: Callable[..., MockConfigEntry],
+) -> None:
+    fake_tel2.respond(
+        "Get-Webhooks",
+        registrations(
+            ("3", "Other app", "https://other.example.com/hook"),
+            ("7", REGISTRATION_NAME, REGISTERED_URL),
+        ),
+    )
+    entry = add_entry(hass, mock_config_entry_factory, webhook_id=WEBHOOK_ID)
+
+    await async_remove_registration(hass, entry, make_client(hass, entry))
+
+    [request] = fake_tel2.requests_for("Delete-Webhook")
+    assert request.params == {"id": "7"}
+
+
+async def test_remove_registration_without_a_stored_id_or_listing_deletes_nothing(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    mock_config_entry_factory: Callable[..., MockConfigEntry],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    fake_tel2.respond(
+        "Get-Webhooks",
+        registrations(("3", "Other app", "https://other.example.com/hook")),
+    )
+    entry = add_entry(hass, mock_config_entry_factory, webhook_id=WEBHOOK_ID)
+
+    await async_remove_registration(hass, entry, make_client(hass, entry))
+
+    assert fake_tel2.call_count("Get-Webhooks") == 1
+    assert fake_tel2.call_count("Delete-Webhook") == 0
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+
+
+async def test_remove_registration_lookup_with_tel2_down_warns(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    mock_config_entry_factory: Callable[..., MockConfigEntry],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    fake_tel2.respond("Get-Webhooks", aiohttp.ClientError())
+    entry = add_entry(hass, mock_config_entry_factory, webhook_id=WEBHOOK_ID)
+
+    await async_remove_registration(hass, entry, make_client(hass, entry))
+
+    assert fake_tel2.call_count("Delete-Webhook") == 0
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("may remain on the Tel2 account" in r.getMessage() for r in warnings)
+
+
 async def test_remove_registration_with_tel2_down_warns_and_completes(
     hass: HomeAssistant,
     fake_tel2: FakeTel2Api,

@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Iterable, Mapping
 import ipaddress
+import json
 import re
 from typing import Any, Final, NamedTuple
 from urllib.parse import urlsplit
@@ -13,6 +14,8 @@ ACCOUNT_CODE_PLACEHOLDER: Final = "00000000"
 REDACTED: Final = "[REDACTED]"
 POSTCODE_PLACEHOLDER: Final = "ZZ99 9ZZ"
 TIMESTAMP_PLACEHOLDER: Final = "2026-01-01 00:00:00"
+WEBHOOK_NAME_PLACEHOLDER: Final = "Example webhook"
+OWN_WEBHOOK_NAME_PLACEHOLDER: Final = "homeassistant-tel2-example-entry"
 DRAMA_RANGE_SIZE: Final = 1000
 _DRAMA_CANONICAL_PREFIX: Final = "441632960"
 _MIN_PHONE_DIGITS: Final = 9
@@ -54,6 +57,17 @@ _TRIVIAL_SECRET_VALUES: Final = frozenset(
 )
 _ENVELOPE_TEXT_KEYS: Final = frozenset({"message", "status", "action"})
 _SET_UP_TIME_KEYS: Final = frozenset({"stamp", "created", "datecreated"})
+_ADDITIONAL_DETAILS_KEY: Final = "additionaldetails"
+_GROUP_KEYS: Final[Mapping[str, str]] = {
+    "billinggroup": "Example Group",
+    "profile": "Example Profile",
+}
+_WEBHOOK_ROW_KEYS: Final = frozenset({"url", "secretheader", "secrettoken"})
+_OWN_WEBHOOK_PREFIX: Final = "homeassistant-tel2-"
+# Only these keys may keep text with spaces; anything else that reads as prose is replaced.
+_FREE_TEXT_KEYS: Final = frozenset(
+    {"message", "status", "billingdescription", "alias", "country"}
+)
 SECRET_HEADER_PLACEHOLDER: Final = "X-Example-Header"  # noqa: S105
 
 
@@ -223,6 +237,32 @@ _EMBEDDED_DIGITS_RE: Final = re.compile(
 _TIMESTAMP_RE: Final = re.compile(
     r"\d{4}-?\d{2}-?\d{2}[T ]\d{2}:?\d{2}:?\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?"
 )
+_DATE_FORMATS: Final[tuple[tuple[re.Pattern[str], str], ...]] = (
+    (re.compile(r"(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)"), "2026-01-01"),
+    (re.compile(r"(?<!\d)\d{1,2}/\d{1,2}/\d{4}(?!\d)"), "01/01/2026"),
+    (re.compile(r"(?<!\d)\d{8}(?=[T ]\d{2}:?\d{2}:?\d{2})"), "20260101"),
+)
+_FLAG_RE: Final = re.compile(
+    r"\d{1,4}|yes|no|on|off|true|false|enabled|disabled", re.IGNORECASE
+)
+_SAFE_MAIL_RE: Final = re.compile(
+    r"user\d+@example\.com|(?:\+|00)?(?:44|0)?1632960\d{3}(?:@[a-z]+)?"
+)
+_SPACED_PLACEHOLDERS: Final = frozenset(
+    {
+        "Example Customer",
+        "Example Ltd",
+        "Example House",
+        "Example Street",
+        "Example Suburb",
+        "Example County",
+        "Example Group",
+        "Example Profile",
+        "Flat 1",
+        POSTCODE_PLACEHOLDER,
+        WEBHOOK_NAME_PLACEHOLDER,
+    }
+)
 _GENERIC_LINE_NAME_RE: Final = re.compile(r"line \d+", re.IGNORECASE)
 _POSTCODE_RE: Final = re.compile(
     r"(?<![A-Za-z0-9])[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}(?![A-Za-z0-9])", re.IGNORECASE
@@ -237,6 +277,7 @@ class _Block(NamedTuple):
 
     address: bool = False
     line: bool = False
+    webhook: bool = False
 
 
 class LeakError(ValueError):
@@ -279,7 +320,7 @@ class Anonymiser:
         """Return the JSON paths in the output that still look personal or secret."""
         paths: list[str] = []
         for name, value in fixtures.items():
-            self._check(value, name, False, 0, paths)
+            self._check(value, name, "", 0, paths)
         return paths
 
     def _learn(self, raw: str, placeholder: str, *, bounded: bool, kind: str) -> None:
@@ -344,6 +385,10 @@ class Anonymiser:
             return self._number(key, norm_key, value)
         if not isinstance(value, str):
             return value
+        nested = _json_container(value)
+        if nested is not None and norm_key != _ADDITIONAL_DETAILS_KEY:
+            result = self._value(key, norm_key, nested, block, depth + 1)
+            return _DROP if result is _DROP else _compact_json(result)
         return self._str(key, norm_key, value, block)
 
     def _list(self, key: str, norm_key: str, items: list[Any], depth: int) -> list[Any]:
@@ -380,6 +425,7 @@ class Anonymiser:
         block = _Block(
             address=any(_address_placeholder(norm, False) for norm in norm_keys),
             line=bool(norm_keys & _LINE_ROW_KEYS),
+            webhook=bool(norm_keys & _WEBHOOK_ROW_KEYS),
         )
         result: dict[Any, Any] = {}
         for key, item in data.items():
@@ -417,6 +463,19 @@ class Anonymiser:
             return SECRET_HEADER_PLACEHOLDER
         if norm_key in _SET_UP_TIME_KEYS:
             return TIMESTAMP_PLACEHOLDER
+        if _is_birth_key(norm_key):
+            return self._redact(value)
+        if norm_key == _ADDITIONAL_DETAILS_KEY:
+            nested = _json_container(value)
+            if nested is not None and not _has_content(nested):
+                return _compact_json(nested)
+            return self._redact(value)
+        if norm_key in _GROUP_KEYS:
+            return self._redact(value, _GROUP_KEYS[norm_key])
+        if block.webhook and norm_key == "name":
+            if value.startswith(_OWN_WEBHOOK_PREFIX):
+                return OWN_WEBHOOK_NAME_PLACEHOLDER
+            return self._redact(value, WEBHOOK_NAME_PLACEHOLDER)
         if norm_key in _ACCOUNT_KEYS:
             bounded = len(value.strip()) < _MIN_SUBSTRING_ACCOUNT_LENGTH
             self._learn(
@@ -454,7 +513,19 @@ class Anonymiser:
             and norm_key not in _TECHNICAL_NAME_KEYS
         ):
             return self._person(value, "Example Customer")
+        if "mail" in norm_key and not _FLAG_RE.fullmatch(value.strip()):
+            scrubbed = self._scrub(value)
+            parts = [part for part in re.split(r"[,;\s]+", scrubbed) if part]
+            if all(_SAFE_MAIL_RE.fullmatch(part) for part in parts):
+                return scrubbed
+            return self._redact(value)
+        if norm_key not in _FREE_TEXT_KEYS and _is_free_text(value):
+            return self._redact(value)
         return self._scrub(value)
+
+    def _redact(self, value: str, placeholder: str = REDACTED) -> str:
+        self._learn(value, placeholder, bounded=True, kind="name")
+        return placeholder
 
     def _address(self, value: str, placeholder: str) -> str:
         self._learn(value, placeholder, bounded=True, kind="name")
@@ -469,6 +540,9 @@ class Anonymiser:
         return placeholder
 
     def _person(self, value: str, placeholder: str) -> str:
+        # Re-running over anonymised output must not learn the placeholder's own words.
+        if value.strip().casefold() == placeholder.casefold():
+            return placeholder
         self._learn(value, placeholder, bounded=False, kind="name")
         for part in re.split(r"[^\w'-]+", value):
             if len(part) >= _MIN_LEARNED_LENGTH and part.lower() not in _NAME_STOPWORDS:
@@ -547,6 +621,8 @@ class Anonymiser:
         text = _INTL_PHONE_RE.sub(self._replace_phone, text)
         text = self._replace_learned(text)
         text = _HOSTNAME_RE.sub(self._replace_host, text)
+        for pattern, placeholder in _DATE_FORMATS:
+            text = pattern.sub(placeholder, text)
         return _outside_timestamps(text, _zero_embedded_digits)
 
     def _scrub_key(self, key: str) -> str:
@@ -599,9 +675,18 @@ class Anonymiser:
         return replace
 
     def _check(
-        self, value: Any, path: str, exempt: bool, depth: int, paths: list[str]
+        self,
+        value: Any,
+        path: str,
+        norm_key: str,
+        depth: int,
+        paths: list[str],
+        *,
+        exempt: bool = False,
     ) -> None:
-        if isinstance(value, dict):
+        if isinstance(value, str) and (nested := _json_container(value)) is not None:
+            self._check(nested, f"{path}<json>", norm_key, depth + 1, paths)
+        elif isinstance(value, dict):
             envelope = _is_envelope(value, depth)
             for index, (key, item) in enumerate(value.items()):
                 str_key = str(key)
@@ -612,15 +697,24 @@ class Anonymiser:
                     paths.append(child)
                 else:
                     child = f"{path}.{str_key}"
-                child_exempt = envelope and _norm(str_key) in _ENVELOPE_TEXT_KEYS
-                self._check(item, child, child_exempt, depth + 1, paths)
+                norm = _norm(str_key)
+                child_exempt = envelope and norm in _ENVELOPE_TEXT_KEYS
+                self._check(item, child, norm, depth + 1, paths, exempt=child_exempt)
         elif isinstance(value, list):
             for index, item in enumerate(value):
-                self._check(item, f"{path}[{index}]", False, depth + 1, paths)
+                self._check(item, f"{path}[{index}]", norm_key, depth + 1, paths)
         elif (
             value is not None
             and not isinstance(value, bool)
-            and self._leaks(str(value), exempt)
+            and (
+                self._leaks(str(value), exempt)
+                or (
+                    norm_key not in _FREE_TEXT_KEYS
+                    and _is_free_text(str(value))
+                    and str(value) not in _SPACED_PLACEHOLDERS
+                    and not _GENERIC_LINE_NAME_RE.fullmatch(str(value))
+                )
+            )
         ):
             paths.append(path)
 
@@ -640,6 +734,12 @@ class Anonymiser:
         if any(
             _norm(postcode) != _norm(POSTCODE_PLACEHOLDER)
             for postcode in _POSTCODE_RE.findall(text)
+        ):
+            return True
+        if any(
+            date != placeholder
+            for pattern, placeholder in _DATE_FORMATS
+            for date in pattern.findall(text)
         ):
             return True
         return _names_secret(text, exempt=exempt)
@@ -666,6 +766,42 @@ def _outside_timestamps(text: str, replace: Callable[[str], str]) -> str:
         end = match.end()
     parts.append(replace(text[end:]))
     return "".join(parts)
+
+
+def _json_container(text: str) -> dict[Any, Any] | list[Any] | None:
+    """Return the object or array a string holds as JSON, or None."""
+    if not text.lstrip().startswith(("{", "[")):
+        return None
+    try:
+        parsed = json.loads(text)
+    except ValueError:
+        return None
+    return parsed if isinstance(parsed, (dict, list)) else None
+
+
+def _compact_json(value: Any) -> str:
+    return json.dumps(value, separators=(",", ":"), ensure_ascii=False)
+
+
+def _has_content(value: Any) -> bool:
+    """Return whether a decoded JSON value holds any key or non-empty scalar."""
+    if isinstance(value, dict):
+        return bool(value)
+    if isinstance(value, list):
+        return any(_has_content(item) for item in value)
+    return value not in (None, "")
+
+
+def _is_free_text(text: str) -> bool:
+    """Return whether text reads as prose rather than a code, number or timestamp."""
+    rest = _TIMESTAMP_RE.sub("", text).strip()
+    return (
+        re.search(r"\s", rest) is not None and re.search(r"[A-Za-z]", rest) is not None
+    )
+
+
+def _is_birth_key(norm_key: str) -> bool:
+    return norm_key == "dob" or "birth" in norm_key
 
 
 def _address_placeholder(norm_key: str, anchored: bool) -> str | None:

@@ -188,6 +188,44 @@ async def test_write_with_invalid_token_renews_once_and_retries(
     ]
 
 
+async def test_unauthorised_destination_is_a_rejection_not_a_token_retry(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond(
+        "Set-Pref-Value",
+        {
+            "Result": "-1",
+            "Status": "Error",
+            "Message": "Unauthorised destination number.",
+            "Data": [],
+        },
+    )
+
+    with pytest.raises(Tel2ApiError) as err:
+        await WRITES["set_pref"].write(client)
+
+    assert not isinstance(err.value, Tel2AuthError)
+    assert err.value.message == "Unauthorised destination number."
+    assert fake_tel2.call_count("Set-Pref-Value") == 1
+    assert fake_tel2.call_count("Get-Token") == 0
+
+
+async def test_auth_wording_on_a_success_status_is_not_a_token_retry(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond(
+        "Set-Pref-Value",
+        {"Result": "-1", "Status": "Success", "Message": "Invalid Token Specified"},
+    )
+
+    with pytest.raises(Tel2ApiError) as err:
+        await WRITES["set_pref"].write(client)
+
+    assert not isinstance(err.value, Tel2AuthError)
+    assert fake_tel2.call_count("Set-Pref-Value") == 1
+    assert fake_tel2.call_count("Get-Token") == 0
+
+
 @pytest.mark.parametrize(
     "pref",
     [

@@ -122,7 +122,7 @@ Numbers are in international format, e.g. `+447700900123`. A withheld caller com
 
 ### Set line setting action
 
-`tel2.set_line_setting` sets any Tel2 line setting on a number, for settings that don't have their own entity. It takes the number device, Tel2's name for the setting and the value in the form Tel2 expects. Most on/off settings take `1` or `0`.
+`tel2.set_line_setting` sets any Tel2 line setting on a number, for settings that don't have their own entity. It takes the number device, Tel2's name for the setting and the value in the form Tel2 expects. Most on/off settings take `1` or `0`. Only admin users can run it.
 
 ```yaml
 action: tel2.set_line_setting

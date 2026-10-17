@@ -9,10 +9,12 @@ from typing import Any
 
 from aiohttp.test_utils import TestClient
 from freezegun.api import FrozenDateTimeFactory
+from homeassistant.components import webhook
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
+from homeassistant.util.aiohttp import MockRequest
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.typing import ClientSessionGenerator
@@ -532,6 +534,21 @@ async def test_posts_without_the_secret_publish_nothing(
 
     assert harness.events == []
     assert harness.manager.status.last_event_at is None
+
+
+async def test_unencodable_secret_header_publishes_nothing(
+    hass: HomeAssistant, harness: Harness, caplog: pytest.LogCaptureFixture
+) -> None:
+    request = MockRequest(
+        b"{}", mock_source="cloud", method="POST", headers={SECRET_HEADER: "\ud800"}
+    )
+
+    response = await webhook.async_handle_webhook(hass, WEBHOOK_ID, request)
+    await hass.async_block_till_done()
+
+    assert response.status == 200
+    assert harness.events == []
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
 
 
 async def test_events_before_the_first_account_refresh_are_dropped(
