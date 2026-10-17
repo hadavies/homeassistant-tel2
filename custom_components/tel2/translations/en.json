@@ -172,10 +172,10 @@
       "message": "Tel2 rejected the setting: {message}"
     },
     "resync_failed": {
-      "message": "Tel2 couldn't resync the line, check a phone is registered to it"
+      "message": "Tel2 couldn't resync the line. Check Tel2 is reachable and a phone is registered to it."
     },
     "reboot_failed": {
-      "message": "Tel2 couldn't reboot the phone, check a phone is registered to the line"
+      "message": "Tel2 couldn't reboot the phone. Check Tel2 is reachable and a phone is registered to the line."
     },
     "update_cannot_connect": {
       "message": "Can't reach Tel2, will try again at the next refresh"
