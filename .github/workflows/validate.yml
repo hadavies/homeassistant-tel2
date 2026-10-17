@@ -32,7 +32,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      # description and topics until the repo settings are applied (task 9.3), images until the README screenshot lands (9.4).
+      # description and topics until the repo settings are applied, images until the README screenshot lands.
       - uses: hacs/action@main
         with:
           category: integration

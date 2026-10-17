@@ -73,7 +73,7 @@ This repo is public, so someone has to read every captured file before it's comm
 
 Keep PRs small, one change each, and fill in the template.
 
-Label every PR, the release notes are grouped by label:
+The maintainer labels each PR, the release notes are grouped by label:
 
 - `breaking` for changes users have to act on.
 - `feature` for new behaviour.
@@ -87,5 +87,6 @@ Releases are done by the maintainer, please don't bump the version in a PR.
 
 - Bump `version` in `custom_components/tel2/manifest.json`.
 - Tag that commit `vX.Y.Z`, matching the manifest version.
-- Publish a GitHub release from the tag, the notes are generated from the PR labels.
+- Run the Release workflow by hand with the tag first and check it passes, a mismatch after publishing leaves a release without `tel2.zip`.
+- Publish a GitHub release from the tag, the notes are generated from the PR labels. Tick Set as a pre-release for `bN` versions.
 - The release workflow checks the tag matches the manifest and attaches `tel2.zip`, which is what HACS installs.

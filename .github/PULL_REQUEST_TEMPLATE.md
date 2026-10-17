@@ -4,4 +4,4 @@
 ### How to test:
 -
 
-Please label this PR (breaking, feature, fix, docs or maintenance) so it lands in the right part of the release notes.
+The maintainer labels PRs (breaking, feature, fix, docs or maintenance) for the release notes.

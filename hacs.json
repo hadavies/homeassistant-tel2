@@ -4,5 +4,5 @@
   "country": ["GB"],
   "zip_release": true,
   "filename": "tel2.zip",
-  "render_readme": true
+  "hide_default_branch": true
 }

@@ -18,7 +18,7 @@ body:
     id: solution
     attributes:
       label: What you'd like
-      description: How you'd like it to work in Home Assistant, E.G a new sensor, switch or action.
+      description: How you'd like it to work in Home Assistant, e.g. a new sensor, switch or action.
     validations:
       required: true
   - type: textarea

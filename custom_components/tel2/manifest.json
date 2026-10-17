@@ -9,7 +9,6 @@
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/hadavies/homeassistant-tel2/issues",
-  "loggers": [],
   "requirements": [],
   "version": "0.1.0b1"
 }

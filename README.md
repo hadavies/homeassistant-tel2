@@ -15,6 +15,8 @@ This is an unofficial integration. It isn't made, supported or endorsed by Tel2,
 
 Voicemail isn't covered yet. SMS, call history and billing changes are out of scope.
 
+This is a beta. Call recording and the forward destination haven't been checked against a live account yet, so please raise an issue if either doesn't behave.
+
 ## Before you start
 
 - A Tel2 account with at least one number.
@@ -41,7 +43,7 @@ It isn't in the HACS default store yet, so add it as a custom repository first.
 
 1. In HACS, open the three-dot menu and pick Custom repositories.
 2. Add `https://github.com/hadavies/homeassistant-tel2` with the type Integration.
-3. Search HACS for Tel2 and download it.
+3. Search HACS for Tel2 and download it. While Tel2 is in beta there's only a pre-release, so pick the latest `v0.1.0b` release from the version list in the download dialog.
 4. Restart Home Assistant.
 
 ### Manually
@@ -94,6 +96,7 @@ Changes apply straight away, no restart needed.
 
 - Balances are in GBP.
 - API connected is a diagnostic sensor, it turns off when the last refresh couldn't reach Tel2.
+- Forward destination and the two buttons are under Configuration on the device page.
 - Registered is on while a phone or app is registered to the number.
 - The bundle sensors only appear for numbers with a call bundle, a bundle added later gets them on the next account refresh.
 - Settings changed in the Tel2 portal, the app or by star code show up within one line refresh.
@@ -101,11 +104,11 @@ Changes apply straight away, no restart needed.
 - The forward destination has to start with 0 or +, e.g. `07700 900123` or `+1 202 555 0147`.
 - Resync line pushes the current settings to the phone, and both buttons need a phone registered on the line.
 - Call is unavailable while call events are off or Tel2 can't reach Home Assistant, see [Call events](#call-events).
-- If Tel2 can't be reached, the entities go unavailable and come back by themselves once it can. Call is the exception, call events still come through.
+- If Tel2 can't be reached, the entities go unavailable and come back by themselves once it can. API connected turns off instead, and Call keeps receiving events.
 
 ### Call event types
 
-Calls fire `ringing`, `answered`, `ended` and `missed`. Outgoing calls can also end with `busy`, `no_answer`, `rejected`, `invalid`, `not_available` or `blocked`.
+Calls fire `ringing`, `answered`, `ended` and `missed`. Incoming calls can also be `blocked`, e.g. by Reject anonymous calls, so a missed call automation won't see those. Outgoing calls can also end with `busy`, `no_answer`, `rejected`, `invalid` or `not_available`.
 
 Each event carries these attributes:
 
@@ -243,7 +246,7 @@ logger:
 
 Open the integration under Settings > Devices & services, then Download diagnostics from the three-dot menu.
 
-Passwords, tokens, the call event address and its secret are removed. Your own numbers are replaced with `line_1`, `line_2` and so on, and names and other people's numbers are redacted. Read the file before you attach it to an issue anyway, issues here are public.
+Passwords, tokens, the portal login, your account code, the call event address and its secret are removed. Your own numbers are replaced with `line_1`, `line_2` and so on, and names and other people's numbers are redacted. Read the file before you attach it to an issue anyway, issues here are public.
 
 Bugs go in the [issue tracker](https://github.com/hadavies/homeassistant-tel2/issues), the bug form asks for diagnostics and a debug log.
 

@@ -25,6 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
           persist-credentials: false
 
       - name: Compare manifest version with tag

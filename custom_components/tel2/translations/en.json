@@ -34,6 +34,7 @@
     },
     "abort": {
       "already_configured": "This Tel2 account is already set up",
+      "already_in_progress": "This Tel2 account is already being set up",
       "wrong_account": "That login belongs to a different Tel2 account. Use a login for the account that's already set up.",
       "reauth_successful": "Signed in again, Tel2 is working"
     }
