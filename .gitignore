@@ -13,3 +13,8 @@ coverage.xml
 htmlcov/
 *.egg-info/
 .DS_Store
+
+# Local credentials, never commit
+.env
+env
+*.env
