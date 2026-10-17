@@ -25,6 +25,7 @@ from .models import (
     PlanSummary,
     Tel2Number,
     WebhookRegistration,
+    WebhookSpec,
 )
 from .numbering import canonical_number, is_valid_destination
 
@@ -63,6 +64,19 @@ _DROPPED_PREFS: Final = (
     | {"pref_uid", "blacklist", "do_not_disturb_forward"}
 )
 _OWN_NUMBER_PREFS: Final = frozenset({"mailbox", "voicemailmailbox"})
+_SET_PREF: Final = "Set-Pref-Value"
+_FLAG_ON: Final = "1"
+_FLAG_OFF: Final = "0"
+_WEBHOOK_STATES: Final = (
+    "inboundringing",
+    "inboundanswered",
+    "inboundended",
+    "inboundmissed",
+    "outboundringing",
+    "outboundanswered",
+    "outboundended",
+    "outboundunattended",
+)
 
 
 class Tel2Error(Exception):
@@ -254,6 +268,53 @@ class Tel2Client:
             )
         return webhooks
 
+    async def async_set_pref(self, number: Tel2Number, pref: str, value: str) -> None:
+        """Set one pref on a number; secret prefs are refused unsent."""
+        if _is_secret_key(pref):
+            raise Tel2ApiError(
+                f"Refusing to send secret pref {pref} to Tel2", "voice", _SET_PREF
+            )
+        await self._call_write(
+            "voice", _SET_PREF, {"line": number.tel2_id, "pref": pref, "value": value}
+        )
+
+    async def async_set_recording(self, number: Tel2Number, enabled: bool) -> None:
+        """Turn call recording on or off for a number."""
+        action = "Enable-Recording" if enabled else "Disable-Recording"
+        await self._call_write("voice", action, {"number": number.tel2_id})
+
+    async def async_resync_line(self, number: Tel2Number) -> None:
+        """Ask Tel2 to push the current settings to the number's phone."""
+        await self._call_write("voice", "Resync-Line", {"line": number.tel2_id})
+
+    async def async_reboot_phone(self, number: Tel2Number) -> None:
+        """Ask Tel2 to reboot the number's phone."""
+        await self._call_write("voice", "Reboot-Phone", {"line": number.tel2_id})
+
+    async def async_add_webhook(
+        self, spec: WebhookSpec, edit_id: str | None = None
+    ) -> None:
+        """Register a webhook for every line, or update the one with edit_id."""
+        token = spec.secret_token
+        if not (token.isascii() and token.isalnum()):
+            raise ValueError("Tel2 webhook secret token must be alphanumeric")
+        params = {
+            "name": spec.name,
+            "url": spec.url,
+            "secrettoken": token,
+            "secretheader": spec.secret_header,
+            **dict.fromkeys(_WEBHOOK_STATES, _FLAG_ON),
+            "e164format": _FLAG_ON,
+            "airecording": _FLAG_OFF,
+        }
+        if edit_id is not None:
+            params["editid"] = edit_id
+        await self._call_write("api", "Add-Webhook", params)
+
+    async def async_delete_webhook(self, webhook_id: str) -> None:
+        """Delete a webhook registration."""
+        await self._call_write("api", "Delete-Webhook", {"id": webhook_id})
+
     async def async_probe_access(self) -> set[AccessContext]:
         """Return the contexts whose probe function Tel2 refused."""
         refused: set[AccessContext] = set()
@@ -275,6 +336,17 @@ class Tel2Client:
             return await self._call(context, action)
         except Tel2NoData as err:
             raise Tel2ApiError(str(err), context, action) from err
+
+    async def _call_write(
+        self, context: AccessContext, action: str, params: dict[str, Any]
+    ) -> None:
+        """Call a Tel2 write; anything but Result 1 means it was not executed."""
+        try:
+            await self._call(context, action, params)
+        except Tel2NoData as err:
+            raise Tel2ApiError(
+                f"Tel2 {action} was not applied: {err}", context, action
+            ) from err
 
     async def _call(
         self,
@@ -444,12 +516,21 @@ def _canonical(raw: str | None) -> str | None:
         return None
 
 
+def _is_secret_key(key: str) -> bool:
+    lowered = key.lower()
+    return lowered in SECRET_PREFS or any(
+        pattern in lowered for pattern in _SECRET_KEY_PATTERNS
+    )
+
+
 def _is_private_key(key: str) -> bool:
     lowered = key.lower()
     if lowered == PREF_FORWARD_ALWAYS_NUMBER:
         return False
-    return lowered in _DROPPED_PREFS or any(
-        pattern in lowered for pattern in _SECRET_KEY_PATTERNS + _PERSONAL_KEY_PATTERNS
+    return (
+        lowered in _DROPPED_PREFS
+        or _is_secret_key(lowered)
+        or any(pattern in lowered for pattern in _PERSONAL_KEY_PATTERNS)
     )
 
 
