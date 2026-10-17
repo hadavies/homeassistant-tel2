@@ -98,7 +98,7 @@ Changes apply straight away, no restart needed.
 - The bundle sensors only appear for numbers with a call bundle.
 - Settings changed in the Tel2 portal, the app or by star code show up within one line refresh.
 - Forward all calls won't turn on until a forward destination is set.
-- The forward destination has to start with 0 or +, e.g. `07700 900123` or `+33 1 23 45 67 89`.
+- The forward destination has to start with 0 or +, e.g. `07700 900123` or `+1 202 555 0147`.
 - Resync line pushes the current settings to the phone, and both buttons need a phone registered on the line.
 - Call is unavailable while call events are off or Tel2 can't reach Home Assistant, see [Call events](#call-events).
 - If Tel2 can't be reached, the entities go unavailable and come back by themselves once it can.
