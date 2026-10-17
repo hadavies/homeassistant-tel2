@@ -7,6 +7,7 @@ from types import MappingProxyType
 from typing import Final
 
 DOMAIN: Final = "tel2"
+MANUFACTURER: Final = "Tel2"
 
 API_URL: Final = "https://portal.tel2.co.uk/api/"
 TEL2_COUNTRY_CODE: Final = "44"
