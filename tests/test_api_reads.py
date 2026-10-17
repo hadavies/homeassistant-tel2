@@ -135,6 +135,16 @@ async def test_customer_details_without_company(
     assert details.company_name is None
 
 
+async def test_customer_details_without_name_or_status_are_empty(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond("Get-Customer-Details", success({"AccountCode": "00000000"}))
+
+    details = await client.async_get_customer_details()
+
+    assert (details.customer_name, details.status) == ("", "")
+
+
 async def test_customer_details_no_data_is_api_error(
     client: Tel2Client, fake_tel2: FakeTel2Api
 ) -> None:
@@ -155,6 +165,18 @@ async def test_account_balance(client: Tel2Client) -> None:
     assert isinstance(balance.balance, Decimal)
 
 
+async def test_balance_at_the_magnitude_limit_is_a_number(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond(
+        "Get-Account-Balance", success({"Balance": "1E12", "AvailableBalance": "0"})
+    )
+
+    balance = await client.async_get_account_balance()
+
+    assert balance.balance == Decimal("1E12")
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -162,6 +184,7 @@ async def test_account_balance(client: Tel2Client) -> None:
         {"Balance": "NaN", "AvailableBalance": "10.00"},
         {"Balance": "12.34", "AvailableBalance": "Infinity"},
         {"Balance": "1E1000000", "AvailableBalance": "10.00"},
+        {"Balance": "1E13", "AvailableBalance": "10.00"},
         {"Balance": "12.34", "AvailableBalance": "1E-1000000"},
         {"AvailableBalance": "10.00"},
         "not a mapping",
@@ -171,6 +194,7 @@ async def test_account_balance(client: Tel2Client) -> None:
         "nan",
         "infinite",
         "huge",
+        "over-the-limit",
         "tiny",
         "missing-field",
         "not-a-mapping",
@@ -399,6 +423,30 @@ async def test_duplicate_numbers_keep_the_first_row(
         (LINE_1, "Line 1"),
         (LINE_2, "Line 2"),
     ]
+
+
+async def test_unusable_number_row_does_not_stop_the_rows_after_it(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    rows = load_fixture("get_numbers.json")["Data"]
+    rows.insert(0, rows[0] | {"ServiceName": "203"})
+    fake_tel2.respond("Get-Numbers", success(rows))
+
+    numbers = await client.async_get_numbers()
+
+    assert [n.canonical for n in numbers] == [LINE_1, LINE_2]
+
+
+async def test_duplicate_number_does_not_stop_the_rows_after_it(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    rows = load_fixture("get_numbers.json")["Data"]
+    rows.insert(1, rows[0] | {"ServiceName": "+44 1632 960001"})
+    fake_tel2.respond("Get-Numbers", success(rows))
+
+    numbers = await client.async_get_numbers()
+
+    assert [n.canonical for n in numbers] == [LINE_1, LINE_2]
 
 
 async def test_line_names_with_unreadable_numbers_are_ignored(
@@ -699,6 +747,34 @@ async def test_webhooks_accept_upper_case_id(
 
     assert await client.async_get_webhooks() == [
         WebhookRegistration(tel2_id="7", name="x", url="https://example.invalid/x")
+    ]
+
+
+async def test_webhook_without_name_or_url_has_empty_text(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond("Get-Webhooks", success([{"id": "3"}]))
+
+    assert await client.async_get_webhooks() == [
+        WebhookRegistration(tel2_id="3", name="", url="")
+    ]
+
+
+async def test_webhook_without_an_id_does_not_stop_the_rows_after_it(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond(
+        "Get-Webhooks",
+        success(
+            [
+                {"name": "no id", "url": "https://example.invalid/a"},
+                {"id": "4", "name": "x", "url": "https://example.invalid/x"},
+            ]
+        ),
+    )
+
+    assert await client.async_get_webhooks() == [
+        WebhookRegistration(tel2_id="4", name="x", url="https://example.invalid/x")
     ]
 
 

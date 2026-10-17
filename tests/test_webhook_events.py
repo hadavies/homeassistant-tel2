@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+import json
 import logging
 from typing import Any
 
@@ -19,7 +20,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.typing import ClientSessionGenerator
 
-from custom_components.tel2.const import CallEventType
+from custom_components.tel2.const import CONF_WEBHOOK_SECRET, CallEventType
 from custom_components.tel2.coordinator import Tel2AccountCoordinator
 from custom_components.tel2.models import (
     AccountBalance,
@@ -265,6 +266,8 @@ async def test_secret_header_name_is_case_insensitive(
         pytest.param("duration", "9" * 10, id="duration-10-digits"),
         pytest.param("duration", "9" * 5000, id="duration-5000-digits"),
         pytest.param("duration", 10**10, id="duration-huge-int"),
+        pytest.param("duration", 10**9, id="duration-10-digit-int"),
+        pytest.param("duration", "\uff11\uff12", id="duration-full-width"),
     ],
 )
 async def test_unreadable_optional_fields_become_none(
@@ -277,6 +280,26 @@ async def test_unreadable_optional_fields_become_none(
 
     [event] = harness.events
     assert getattr(event, optional) is None
+
+
+@pytest.mark.parametrize(
+    ("value", "duration"),
+    [
+        pytest.param("123456789", 123456789, id="9-digit-string"),
+        pytest.param(0, 0, id="zero"),
+        pytest.param(10**9 - 1, 10**9 - 1, id="largest-int"),
+    ],
+)
+async def test_readable_durations_are_kept(
+    hass: HomeAssistant, harness: Harness, value: Any, duration: int
+) -> None:
+    payload = {**load_fixture("webhook_inbound_ended.json"), "duration": value}
+
+    assert await harness.post(payload) == 200
+    await hass.async_block_till_done()
+
+    [event] = harness.events
+    assert event.duration == duration
 
 
 def without(fixture: str, key: str) -> dict[str, Any]:
@@ -469,6 +492,10 @@ async def test_call_ids_are_printable_and_bounded(
             id="unknown type",
         ),
         pytest.param(
+            replaced("webhook_outbound_ringing.json", "type", "forwarded"),
+            id="unknown type from one of our numbers",
+        ),
+        pytest.param(
             replaced("webhook_inbound_ringing.json", "to", "anonymous"),
             id="invalid inbound to",
         ),
@@ -525,7 +552,10 @@ async def test_unusable_posts_publish_nothing(
     ],
 )
 async def test_posts_without_the_secret_publish_nothing(
-    hass: HomeAssistant, harness: Harness, secret: str | None
+    hass: HomeAssistant,
+    harness: Harness,
+    caplog: pytest.LogCaptureFixture,
+    secret: str | None,
 ) -> None:
     payload = load_fixture("webhook_inbound_ringing.json")
 
@@ -534,13 +564,42 @@ async def test_posts_without_the_secret_publish_nothing(
 
     assert harness.events == []
     assert harness.manager.status.last_event_at is None
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+@pytest.mark.parametrize(
+    ("stored", "sent"),
+    [pytest.param("", "", id="empty"), pytest.param(12345, "12345", id="not text")],
+)
+async def test_unusable_stored_secret_accepts_no_post(
+    hass: HomeAssistant,
+    harness: Harness,
+    caplog: pytest.LogCaptureFixture,
+    stored: Any,
+    sent: str,
+) -> None:
+    hass.config_entries.async_update_entry(
+        harness.entry, data={**harness.entry.data, CONF_WEBHOOK_SECRET: stored}
+    )
+
+    assert (
+        await harness.post(load_fixture("webhook_inbound_ringing.json"), secret=sent)
+        == 200
+    )
+    await hass.async_block_till_done()
+
+    assert harness.events == []
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
 
 
 async def test_unencodable_secret_header_publishes_nothing(
     hass: HomeAssistant, harness: Harness, caplog: pytest.LogCaptureFixture
 ) -> None:
     request = MockRequest(
-        b"{}", mock_source="cloud", method="POST", headers={SECRET_HEADER: "\ud800"}
+        json.dumps(load_fixture("webhook_inbound_ringing.json")).encode(),
+        mock_source="cloud",
+        method="POST",
+        headers={SECRET_HEADER: "\ud800"},
     )
 
     response = await webhook.async_handle_webhook(hass, WEBHOOK_ID, request)

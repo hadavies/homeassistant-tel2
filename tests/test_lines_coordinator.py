@@ -282,6 +282,29 @@ async def test_account_update_before_lines_have_loaded_does_not_refresh_lines(
     assert fake_tel2.call_count("Get-All-Pref-Summary") == pref_calls
 
 
+async def test_account_update_without_lines_data_does_nothing(
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    account: Tel2AccountCoordinator,
+    lines: Tel2LinesCoordinator,
+    fake_tel2: FakeTel2Api,
+) -> None:
+    await first_refresh(hass, entry, account, lines)
+    pref_calls = fake_tel2.call_count("Get-All-Pref-Summary")
+    account_data = account.data
+    lines_data = lines.data
+
+    lines.data = None  # type: ignore[assignment]
+    lines._async_account_updated()
+    lines.data = lines_data
+    account.data = None  # type: ignore[assignment]
+    lines._async_account_updated()
+    account.data = account_data
+    await hass.async_block_till_done()
+
+    assert fake_tel2.call_count("Get-All-Pref-Summary") == pref_calls
+
+
 async def test_without_account_data_there_are_no_lines(
     lines: Tel2LinesCoordinator, fake_tel2: FakeTel2Api
 ) -> None:

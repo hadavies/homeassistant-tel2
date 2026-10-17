@@ -188,6 +188,21 @@ async def test_non_success_status_is_api_error_not_no_data(
     assert fake_tel2.call_count("Get-Token") == 1
 
 
+async def test_error_without_a_message_has_an_empty_message(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond("Get-Account-Balance", {"Result": "-1", "Status": "Error"})
+
+    with pytest.raises(Tel2ApiError) as err:
+        await client._call("account", "Get-Account-Balance")
+
+    assert err.value.message == ""
+
+
+def test_api_error_text_is_the_tel2_message() -> None:
+    assert str(Tel2ApiError("m", "voice", "X")) == "m"
+
+
 async def test_no_data_without_a_data_field_is_no_data(
     client: Tel2Client, fake_tel2: FakeTel2Api
 ) -> None:
@@ -260,6 +275,18 @@ async def test_get_token_success_without_token_raises_connection_error(
     client: Tel2Client, fake_tel2: FakeTel2Api
 ) -> None:
     fake_tel2.respond("Get-Token", envelope("1", "Method Executed Successfully.", {}))
+
+    with pytest.raises(Tel2ConnectionError):
+        await client.async_authenticate()
+
+
+@pytest.mark.parametrize("token", ["", 123])
+async def test_get_token_with_an_unusable_token_raises_connection_error(
+    client: Tel2Client, fake_tel2: FakeTel2Api, token: Any
+) -> None:
+    fake_tel2.respond(
+        "Get-Token", envelope("1", "Method Executed Successfully.", {"token": token})
+    )
 
     with pytest.raises(Tel2ConnectionError):
         await client.async_authenticate()
@@ -382,6 +409,28 @@ async def test_wrong_password_during_renewal_raises_auth_error(
 
     assert fake_tel2.call_count("Get-Token") == 2
     assert fake_tel2.call_count("Get-Account-Balance") == 1
+
+
+async def test_failed_renewal_drops_the_rejected_token(
+    session: aiohttp.ClientSession, fake_tel2: FakeTel2Api
+) -> None:
+    client = Tel2Client(session, LOGIN, PASSWORD, token="expired-token")
+    fake_tel2.respond("Get-Token", TimeoutError(), "get_token.json")
+    fake_tel2.respond(
+        "Get-Account-Balance", "error_invalid_token.json", "get_account_balance.json"
+    )
+
+    with pytest.raises(Tel2ConnectionError):
+        await client._call("account", "Get-Account-Balance")
+    await client._call("account", "Get-Account-Balance")
+
+    assert [request.action for request in fake_tel2.requests] == [
+        "Get-Account-Balance",
+        "Get-Token",
+        "Get-Token",
+        "Get-Account-Balance",
+    ]
+    assert fake_tel2.requests[-1].body["token"] == FIXTURE_TOKEN
 
 
 async def test_get_token_api_error_is_not_auth(
@@ -525,6 +574,7 @@ async def test_every_request_is_a_json_post_to_the_api_url(
         assert request.method.upper() == "POST"
         assert request.url == URL(API_URL)
         assert request.headers["Content-Type"] == "application/json"
+        assert request.headers["Accept"] == "application/json"
 
 
 async def test_api_url_can_be_overridden(aioclient_mock: AiohttpClientMocker) -> None:

@@ -1,6 +1,11 @@
 """Tests for the Tel2 text platform."""
 
-from homeassistant.components.text import ATTR_VALUE, DOMAIN as TEXT_DOMAIN
+from homeassistant.components.text import (
+    ATTR_VALUE,
+    DATA_COMPONENT,
+    DOMAIN as TEXT_DOMAIN,
+    TextEntity,
+)
 from homeassistant.components.text.const import SERVICE_SET_VALUE
 from homeassistant.const import ATTR_ENTITY_ID, STATE_UNKNOWN, Platform
 from homeassistant.core import HomeAssistant
@@ -28,6 +33,12 @@ def text_id(hass: HomeAssistant, line: str) -> str:
     )
     assert entity_id is not None, line
     return entity_id
+
+
+def text_entity(hass: HomeAssistant, line: str) -> TextEntity:
+    entity = hass.data[DATA_COMPONENT].get_entity(text_id(hass, line))
+    assert entity is not None, line
+    return entity
 
 
 def state_of(hass: HomeAssistant, line: str) -> str:
@@ -201,7 +212,33 @@ async def test_unusable_stored_destination_is_unknown(
 
     monkeypatch.setattr(lines, "async_request_refresh", no_refresh)
 
-    for stored in ("", "sip:someone@example.com", "+123456789012345678901"):
+    for stored in (
+        "",
+        "abc",
+        "sip:someone@example.com",
+        "+" + "1" * 20,
+        "+123456789012345678901",
+    ):
         await lines.async_apply_optimistic(LINE_1, PREF_FORWARD_ALWAYS_NUMBER, stored)
         await hass.async_block_till_done()
         assert state_of(hass, LINE_1) == STATE_UNKNOWN
+        assert text_entity(hass, LINE_1).native_value is None, stored
+
+
+async def test_stored_destination_at_the_length_limit_is_shown_unchanged(
+    hass: HomeAssistant, fake_tel2: FakeTel2Api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entry = await async_setup_integration(hass, fake_tel2)
+    lines = entry.runtime_data.lines
+
+    async def no_refresh() -> None:
+        return None
+
+    monkeypatch.setattr(lines, "async_request_refresh", no_refresh)
+    stored = "+44 (0) 7700 900 123"
+    assert len(stored) == 20
+
+    await lines.async_apply_optimistic(LINE_1, PREF_FORWARD_ALWAYS_NUMBER, stored)
+    await hass.async_block_till_done()
+
+    assert state_of(hass, LINE_1) == stored

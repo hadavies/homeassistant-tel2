@@ -39,6 +39,10 @@ def test_trunk_zero_is_kept_after_a_foreign_country_code() -> None:
     assert canonical_number("+64 09 242 0000") == "64092420000"
 
 
+def test_trunk_zero_in_brackets_is_dropped_after_a_foreign_country_code() -> None:
+    assert canonical_number("+33 (0)1 99 00 12 34") == "33199001234"
+
+
 def test_foreign_international_number_is_kept() -> None:
     assert canonical_number("+64 9 242 0000") == "6492420000"
     assert canonical_number("006492420000") == "6492420000"
@@ -63,8 +67,10 @@ def test_display_round_trips_through_canonical() -> None:
         "0",
         "-()",
         "01632 96012x",
+        "01632 96012X",
         "abc",
         "+44+1632960123",
+        "+44 \uff17\uff17\uff10\uff10 \uff19\uff10\uff10\uff11\uff12\uff13",
         "+01632960123",
         "+0044 1632 960123",
     ],
@@ -108,4 +114,4 @@ def test_valid_destinations(raw: str) -> None:
     ],
 )
 def test_invalid_destinations(raw: str) -> None:
-    assert not is_valid_destination(raw)
+    assert is_valid_destination(raw) is False

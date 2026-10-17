@@ -15,7 +15,12 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.tel2.api import Tel2AuthError, Tel2Client, Tel2ConnectionError
+from custom_components.tel2.api import (
+    Tel2AuthError,
+    Tel2Client,
+    Tel2ConnectionError,
+    Tel2Error,
+)
 import custom_components.tel2.config_flow  # noqa: F401  registers the reauth handler
 from custom_components.tel2.const import (
     ACCOUNT_SCAN_INTERVAL,
@@ -23,7 +28,7 @@ from custom_components.tel2.const import (
     CONF_PASSWORD,
     DOMAIN,
 )
-from custom_components.tel2.coordinator import Tel2AccountCoordinator
+from custom_components.tel2.coordinator import Tel2AccountCoordinator, _update_error
 from custom_components.tel2.models import (
     AccountBalance,
     AccountState,
@@ -82,6 +87,13 @@ async def first_refresh(
     entry.mock_state(hass, ConfigEntryState.SETUP_IN_PROGRESS)
     await coordinator.async_config_entry_first_refresh()
     entry.mock_state(hass, ConfigEntryState.LOADED)
+
+
+def no_numbers_warnings(caplog: pytest.LogCaptureFixture) -> int:
+    return sum(
+        r.levelno == logging.WARNING and "no numbers" in r.getMessage()
+        for r in caplog.records
+    )
 
 
 def add_number_device(
@@ -263,6 +275,7 @@ async def test_empty_numbers_on_first_refresh_keep_number_devices(
     entry: MockConfigEntry,
     coordinator: Tel2AccountCoordinator,
     fake_tel2: FakeTel2Api,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     add_number_device(hass, entry, LINE_1)
     fake_tel2.respond("Get-Numbers", dict(NO_DATA))
@@ -270,6 +283,7 @@ async def test_empty_numbers_on_first_refresh_keep_number_devices(
     await first_refresh(hass, entry, coordinator)
 
     assert number_device(hass, entry, LINE_1) is not None
+    assert no_numbers_warnings(caplog) == 1
 
 
 async def test_numbers_returning_after_empty_refresh_remove_only_gone_ones(
@@ -288,6 +302,69 @@ async def test_numbers_returning_after_empty_refresh_remove_only_gone_ones(
 
     assert number_device(hass, entry, LINE_1) is not None
     assert number_device(hass, entry, LINE_2) is None
+
+
+async def test_no_numbers_warning_returns_after_numbers_come_back(
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    coordinator: Tel2AccountCoordinator,
+    fake_tel2: FakeTel2Api,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    await first_refresh(hass, entry, coordinator)
+    fake_tel2.respond(
+        "Get-Numbers", dict(NO_DATA), dict(NO_DATA), "get_numbers.json", dict(NO_DATA)
+    )
+
+    warnings = []
+    for _ in range(4):
+        await coordinator.async_refresh()
+        warnings.append(no_numbers_warnings(caplog))
+
+    assert warnings == [1, 1, 1, 2]
+
+
+@pytest.mark.parametrize(
+    ("company", "customer", "name"),
+    [
+        ("", "Example Customer", "Example Customer"),
+        ("", "", ACCOUNT_CODE),
+    ],
+)
+async def test_account_device_name_falls_back_to_customer_then_account_code(
+    *,
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    coordinator: Tel2AccountCoordinator,
+    fake_tel2: FakeTel2Api,
+    company: str,
+    customer: str,
+    name: str,
+) -> None:
+    fake_tel2.respond(
+        "Get-Customer-Details",
+        success(
+            {
+                "AccountCode": ACCOUNT_CODE,
+                "CompanyName": company,
+                "CustomerName": customer,
+            }
+        ),
+    )
+
+    await first_refresh(hass, entry, coordinator)
+
+    device = number_device(hass, entry, ACCOUNT_CODE)
+    assert device is not None
+    assert device.name == name
+
+
+def test_plain_tel2_error_is_update_failed_with_its_text() -> None:
+    err = _update_error(Tel2Error("boom"))
+
+    assert isinstance(err, UpdateFailed)
+    assert err.translation_key == "update_tel2_error"
+    assert err.translation_placeholders == {"message": "boom"}
 
 
 async def test_auth_failure_on_first_refresh_raises_auth_failed(

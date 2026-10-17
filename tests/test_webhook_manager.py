@@ -902,6 +902,143 @@ async def test_added_registration_missing_on_re_read_is_warned(
     assert WEBHOOK_SECRET not in message
 
 
+async def test_added_registration_missing_on_re_read_keeps_the_stored_id(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    cloud: CloudMocks,
+    mock_config_entry_factory: Callable[..., MockConfigEntry],
+) -> None:
+    hass.config.external_url = EXTERNAL_URL
+    entry = add_entry(
+        hass,
+        mock_config_entry_factory,
+        webhook_id=WEBHOOK_ID,
+        webhook_secret=WEBHOOK_SECRET,
+        tel2_webhook_id="9",
+    )
+
+    manager = await start_manager(hass, entry)
+
+    assert fake_tel2.call_count("Add-Webhook") == 1
+    assert manager.status.registered_on_tel2 is False
+    assert entry.data[CONF_TEL2_WEBHOOK_ID] == "9"
+
+
+async def test_repeated_registration_failures_warn_once_and_recovery_is_logged(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    cloud: CloudMocks,
+    mock_config_entry_factory: Callable[..., MockConfigEntry],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO, logger="custom_components.tel2")
+    hass.config.external_url = EXTERNAL_URL
+    fake_tel2.respond(
+        "Get-Webhooks",
+        ours(REGISTERED_URL),
+        "error_generic.json",
+        "error_generic.json",
+        ours(REGISTERED_URL),
+        ours(REGISTERED_URL),
+        "error_generic.json",
+    )
+    entry = add_entry(
+        hass,
+        mock_config_entry_factory,
+        webhook_id=WEBHOOK_ID,
+        webhook_secret=WEBHOOK_SECRET,
+    )
+
+    manager = await start_manager(hass, entry)
+    await manager.async_reconcile()
+    await manager.async_reconcile()
+    await manager.async_reconcile()
+    assert manager.status.registered_on_tel2 is True
+    await manager.async_reconcile()
+    await manager.async_reconcile()
+
+    messages = [
+        (r.levelno, r.getMessage())
+        for r in caplog.records
+        if r.name == "custom_components.tel2.webhook" and r.levelno >= logging.INFO
+    ]
+    assert [level for level, _ in messages] == [
+        logging.WARNING,
+        logging.INFO,
+        logging.WARNING,
+    ]
+    assert messages[1][1] == "Tel2 call event registration recovered"
+
+
+async def test_url_source_is_none_before_start(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    mock_config_entry_factory: Callable[..., MockConfigEntry],
+) -> None:
+    entry = add_entry(hass, mock_config_entry_factory)
+    client = make_client(hass, entry)
+    manager = Tel2CallEventManager(
+        hass, entry, client, Tel2AccountCoordinator(hass, entry, client)
+    )
+
+    assert manager.status == CallEventStatus("none", False, None)
+
+
+async def test_url_source_returns_to_none_when_the_url_goes(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    cloud: CloudMocks,
+    mock_config_entry_factory: Callable[..., MockConfigEntry],
+) -> None:
+    hass.config.external_url = EXTERNAL_URL
+    fake_tel2.respond("Get-Webhooks", ours(REGISTERED_URL))
+    entry = add_entry(
+        hass,
+        mock_config_entry_factory,
+        webhook_id=WEBHOOK_ID,
+        webhook_secret=WEBHOOK_SECRET,
+    )
+    manager = await start_manager(hass, entry)
+    assert manager.status.url_source == "external"
+
+    hass.config.external_url = None
+    await manager.async_reconcile()
+
+    assert manager.status.url_source == "none"
+
+
+async def test_https_internal_url_alone_is_not_public(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    cloud: CloudMocks,
+    mock_config_entry_factory: Callable[..., MockConfigEntry],
+) -> None:
+    hass.config.internal_url = "https://internal.example.invalid"
+    hass.config.external_url = None
+    entry = add_entry(hass, mock_config_entry_factory)
+
+    manager = await start_manager(hass, entry)
+
+    assert no_url_issue(hass) is not None
+    assert manager.status == CallEventStatus("none", False, None)
+    assert fake_tel2.call_count("Add-Webhook") == 0
+
+
+async def test_unloading_twice_unsubscribes_from_the_cloud_once(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    cloud: CloudMocks,
+    mock_config_entry_factory: Callable[..., MockConfigEntry],
+) -> None:
+    entry = add_entry(hass, mock_config_entry_factory)
+    manager = await start_manager(hass, entry)
+
+    manager.async_unload()
+    manager.async_unload()
+
+    cloud.unsubscribe.assert_called_once_with()
+
+
 def test_availability_signal_name_is_per_entry() -> None:
     assert signal_call_event_availability("abc") == "tel2_abc_call_event_availability"
 
