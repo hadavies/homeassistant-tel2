@@ -1,5 +1,6 @@
 """Tests for the Tel2 button platform."""
 
+from dataclasses import FrozenInstanceError
 from typing import NamedTuple
 
 import aiohttp
@@ -12,6 +13,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import snapshot_platform
 from syrupy.assertion import SnapshotAssertion
 
+from custom_components.tel2.button import BUTTONS as BUTTON_DESCRIPTIONS
 from custom_components.tel2.const import DOMAIN
 from tests.fake_tel2 import FakeTel2Api
 from tests.helpers import ACCOUNT_CODE, LINE_1, LINE_2, async_setup_integration
@@ -117,3 +119,11 @@ async def test_connection_error_raises_a_translated_error(
 
     assert err.value.translation_domain == DOMAIN
     assert err.value.translation_key == case.translation_key
+
+
+@pytest.mark.parametrize(
+    "description", BUTTON_DESCRIPTIONS, ids=lambda description: description.key
+)
+def test_button_descriptions_are_immutable(description: object) -> None:
+    with pytest.raises(FrozenInstanceError):
+        description.key = "changed"  # type: ignore[attr-defined]

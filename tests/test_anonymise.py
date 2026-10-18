@@ -792,6 +792,38 @@ def test_mail_fields_keep_flags_and_addresses_but_not_free_text() -> None:
     assert "jane" not in json.dumps(result)
 
 
+@pytest.mark.parametrize("separator", [", ", "; ", " "])
+def test_mail_field_address_lists_replace_each_address_and_keep_the_separator(
+    separator: str,
+) -> None:
+    result = anonymise_responses(
+        {"p.json": {"Data": {"copy_emails": separator.join(EMAILS)}}}
+    )
+    copy_emails = result["p.json"]["Data"]["copy_emails"]
+    match = re.fullmatch(
+        rf"user(\d+)@example\.com{re.escape(separator)}user(\d+)@example\.com",
+        copy_emails,
+    )
+    assert match is not None
+    assert match[1] != match[2]
+
+
+def test_leak_check_flags_free_text_beside_placeholder_addresses_in_mail_fields() -> (
+    None
+):
+    paths = anonymise.Anonymiser().find_leaks(
+        {"a.json": {"copy_emails": "user1@example.com, ask Jane"}}
+    )
+    assert paths == ["a.json.copy_emails"]
+
+
+def test_leak_check_flags_placeholder_address_lists_outside_mail_fields() -> None:
+    paths = anonymise.Anonymiser().find_leaks(
+        {"a.json": {"Note": "user1@example.com, user2@example.com"}}
+    )
+    assert paths == ["a.json.Note"]
+
+
 def test_free_text_outside_known_fields_is_replaced() -> None:
     result = anonymise_responses(
         {

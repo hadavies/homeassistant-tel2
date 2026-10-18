@@ -80,6 +80,10 @@ async def test_setup_loads_both_coordinators(
     assert not entry.update_listeners
 
 
+def test_runtime_data_is_slotted() -> None:
+    assert "__slots__" in vars(Tel2RuntimeData)
+
+
 async def test_setup_uses_the_stored_token(
     hass: HomeAssistant, fake_tel2: FakeTel2Api
 ) -> None:

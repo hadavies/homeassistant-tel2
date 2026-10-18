@@ -1,7 +1,7 @@
 """Tests for the Tel2 sensor platform."""
 
 import copy
-from dataclasses import replace
+from dataclasses import FrozenInstanceError, replace
 
 from homeassistant.const import (
     ATTR_FRIENDLY_NAME,
@@ -20,6 +20,7 @@ from syrupy.assertion import SnapshotAssertion
 
 from custom_components.tel2.const import DOMAIN
 from custom_components.tel2.runtime import Tel2RuntimeData
+from custom_components.tel2.sensor import ACCOUNT_SENSORS, BUNDLE_SENSORS
 from tests.fake_tel2 import NO_DATA, FakeTel2Api
 from tests.fixture_loader import load_fixture
 from tests.helpers import ACCOUNT_CODE, LINE_1, LINE_2, async_setup_integration
@@ -198,3 +199,13 @@ async def test_plan_unknown_when_alias_and_description_are_blank(
     await async_setup_integration(hass, fake_tel2)
 
     assert state_of(hass, f"{ACCOUNT_CODE}_plan") == STATE_UNKNOWN
+
+
+@pytest.mark.parametrize(
+    "description",
+    [*ACCOUNT_SENSORS, *BUNDLE_SENSORS],
+    ids=lambda description: description.key,
+)
+def test_sensor_descriptions_are_immutable(description: object) -> None:
+    with pytest.raises(FrozenInstanceError):
+        description.key = "changed"  # type: ignore[attr-defined]

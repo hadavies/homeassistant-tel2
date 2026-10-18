@@ -516,8 +516,7 @@ class Anonymiser:
             return self._person(value, "Example Customer")
         if "mail" in norm_key and not _FLAG_RE.fullmatch(value.strip()):
             scrubbed = self._scrub(value)
-            parts = [part for part in re.split(r"[,;\s]+", scrubbed) if part]
-            if all(_SAFE_MAIL_RE.fullmatch(part) for part in parts):
+            if _is_safe_mail_list(scrubbed):
                 return scrubbed
             return self._redact(value)
         if not _may_be_free_text(norm_key, block.envelope) and _is_free_text(value):
@@ -713,6 +712,7 @@ class Anonymiser:
                     not _may_be_free_text(norm_key, exempt)
                     and _is_free_text(str(value))
                     and str(value) not in _SPACED_PLACEHOLDERS
+                    and not ("mail" in norm_key and _is_safe_mail_list(str(value)))
                     and not _GENERIC_LINE_NAME_RE.fullmatch(str(value))
                 )
             )
@@ -799,6 +799,11 @@ def _is_free_text(text: str) -> bool:
     return (
         re.search(r"\s", rest) is not None and re.search(r"[A-Za-z]", rest) is not None
     )
+
+
+def _is_safe_mail_list(text: str) -> bool:
+    parts = [part for part in re.split(r"[,;\s]+", text) if part]
+    return all(_SAFE_MAIL_RE.fullmatch(part) for part in parts)
 
 
 def _may_be_free_text(norm_key: str, in_envelope: bool) -> bool:
