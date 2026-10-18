@@ -248,15 +248,16 @@ async def test_unavailable_once_the_number_leaves_the_account(
     assert state_of(hass, CALL_2).state == STATE_UNAVAILABLE
 
 
+@pytest.mark.parametrize("other", ["000", "\u0661\u0662\u0663"])
 async def test_withheld_digits_are_not_shown_as_a_number(
-    hass: HomeAssistant, fake_tel2: FakeTel2Api
+    hass: HomeAssistant, fake_tel2: FakeTel2Api, other: str
 ) -> None:
     entry = await setup_without_manager(hass, fake_tel2)
     await inject_manager(hass, entry)
 
-    await publish(hass, entry, call_event(CallEventType.MISSED, other="000"))
+    await publish(hass, entry, call_event(CallEventType.MISSED, other=other))
 
-    assert state_of(hass, CALL_1).attributes["from"] == "000"
+    assert state_of(hass, CALL_1).attributes["from"] == other
 
 
 async def test_manager_availability_change_updates_the_entity(

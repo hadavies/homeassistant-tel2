@@ -12,6 +12,7 @@ from homeassistant.helpers.selector import TextSelector, TextSelectorType
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.tel2.config_flow import InsufficientAccess
 from custom_components.tel2.const import CONF_LOGIN, CONF_PASSWORD, CONF_TOKEN, DOMAIN
 from tests.fake_tel2 import FakeTel2Api
 from tests.fixture_loader import load_fixture
@@ -46,6 +47,8 @@ async def test_user_step_shows_login_and_password(hass: HomeAssistant) -> None:
     password = schema[CONF_PASSWORD]
     assert isinstance(password, TextSelector)
     assert password.config["type"] == TextSelectorType.PASSWORD
+    assert password.config["autocomplete"] == "current-password"
+    assert schema[CONF_LOGIN].config["autocomplete"] == "username"
 
 
 async def test_user_creates_entry(
@@ -446,3 +449,7 @@ async def test_reauth_never_logs_credentials(
     assert result["reason"] == "reauth_successful"
     for secret in ("hunter2", "fake-token-for-tests", "old-pass", "old-token"):
         assert secret not in caplog.text
+
+
+def test_insufficient_access_names_the_refused_contexts() -> None:
+    assert str(InsufficientAccess({"voice", "account"})) == "account, voice"

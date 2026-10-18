@@ -901,3 +901,720 @@ def test_committed_captured_fixtures_are_unchanged_by_a_rerun() -> None:
     }
     assert files
     assert anonymise_responses(files) == files
+
+
+def _probe(data: Any, message: str, **kwargs: Any) -> str:
+    result = anonymise_responses(
+        {"d.json": {"Data": data}, "e.json": {"Result": "0", "Message": message}},
+        **kwargs,
+    )
+    return str(result["e.json"]["Message"])
+
+
+def test_more_numbers_than_the_drama_range_holds_fails() -> None:
+    anonymiser = anonymise.Anonymiser()
+    placeholders = {anonymiser._phone(f"07700900{index:03d}") for index in range(1000)}
+    assert placeholders == {f"01632960{index:03d}" for index in range(1000)}
+    with pytest.raises(ValueError, match="drama range"):
+        anonymiser._phone("+33 1 99 00 00 01")
+
+
+def test_nine_digit_number_in_a_number_field_is_replaced() -> None:
+    result = anonymise_responses({"f.json": {"Data": {"Mobile": "07700900"}}})
+    assert re.fullmatch(r"01632960\d{3}", result["f.json"]["Data"]["Mobile"])
+
+
+def test_three_character_secret_is_scrubbed_but_shorter_values_are_not() -> None:
+    assert _probe({}, "code x7q ok", secrets=("x7q", "ok")) == "code [REDACTED] ok"
+
+
+def test_extra_secrets_are_matched_without_surrounding_whitespace() -> None:
+    assert _probe({}, "code Zq7xK9mW", secrets=(" Zq7xK9mW\n",)) == "code [REDACTED]"
+
+
+def test_long_extra_secret_is_scrubbed_inside_a_longer_token() -> None:
+    assert _probe({}, "keyZq7xK9mWend", secrets=("Zq7xK9mW",)) == "key[REDACTED]end"
+
+
+def test_extra_secret_in_a_key_is_scrubbed() -> None:
+    result = anonymise_responses(
+        {"f.json": {"Data": {"Zq7xK9mW": "1"}}}, secrets=("Zq7xK9mW",)
+    )
+    assert result["f.json"]["Data"] == {"[REDACTED]": "1"}
+
+
+def test_long_secret_value_is_scrubbed_inside_a_longer_token() -> None:
+    message = _probe({"voicemail_pin": "Zq7xK9mW"}, "keyZq7xK9mWend")
+    assert message == "key[REDACTED]end"
+
+
+def test_secret_value_in_a_key_is_scrubbed() -> None:
+    result = anonymise_responses(
+        {"f.json": {"Data": {"voicemail_pin": "Zq7xK9mW", "Zq7xK9mW": "1"}}}
+    )
+    assert result["f.json"]["Data"] == {"[REDACTED]": "1"}
+
+
+def test_secret_values_shorter_than_four_characters_are_not_scrubbed_elsewhere() -> (
+    None
+):
+    assert _probe({"voicemail_pin": "864"}, "dial 864") == "dial 864"
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["true", "false", "none", "null", "enabled", "disabled", "active", "inactive"],
+)
+def test_trivial_secret_values_are_not_scrubbed_elsewhere(value: str) -> None:
+    assert _probe({"voicemail_pin": value}, f"now {value}") == f"now {value}"
+
+
+def test_secret_values_in_lists_and_dicts_are_scrubbed_elsewhere() -> None:
+    message = _probe(
+        {"voicemail_pin": ["8642", {"code": "1357"}]}, "pins 8642 and 1357"
+    )
+    assert message == "pins [REDACTED] and [REDACTED]"
+
+
+def test_flat_list_drops_only_the_secret_pair_and_remembers_it() -> None:
+    result = anonymise_responses(
+        {
+            "f.json": {"Data": ["voicemail_pin", "8642", "anoncall_reject", "on"]},
+            "e.json": {"Result": "0", "Message": "set voicemail_pin to 8642"},
+        }
+    )
+    assert result["f.json"]["Data"] == ["anoncall_reject", "on"]
+    assert result["e.json"]["Message"] == "set [REDACTED] to [REDACTED]"
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["db_passwd", "MySecurityAnswer", "PINCode", "UserPwd", "sip_pwd", "masterpin"],
+)
+def test_more_secret_field_names_are_dropped(key: str) -> None:
+    out = _dump({"f.json": {"Data": {key: "Zq7xK9mW"}}})
+    assert "Zq7xK9mW" not in out
+    assert key not in out
+
+
+@pytest.mark.parametrize(
+    "key", ["balance", "availablebalance", "charge", "chargeexcl", "amount", "credit"]
+)
+def test_money_fields_get_the_placeholder(key: str) -> None:
+    result = anonymise_responses(
+        {"s.json": {"Data": {key: "4321.98"}}, "n.json": {"Data": {key: -4321.98}}}
+    )
+    assert result["s.json"]["Data"][key] == "10.00"
+    assert result["n.json"]["Data"][key] == 10.0
+
+
+def test_envelope_status_and_action_naming_a_token_are_kept() -> None:
+    data = {
+        "Result": "-1",
+        "Status": "Token_Expired",
+        "Action": "Get-Token",
+        "Message": "Token_Invalid",
+        "Data": "",
+    }
+    assert anonymise_responses({"e.json": data}) == {"e.json": data}
+
+
+def test_envelope_status_may_hold_free_text() -> None:
+    data = {"Result": "1", "Status": "Partially Successful", "Data": ""}
+    assert anonymise_responses({"e.json": data}) == {"e.json": data}
+
+
+def test_webhook_row_with_only_a_secret_token_is_a_webhook_row() -> None:
+    result = anonymise_responses(
+        {"w.json": {"Data": [{"name": "Jane mobile", "secrettoken": "whsec-abcdef"}]}}
+    )
+    assert result["w.json"]["Data"] == [{"name": "Example webhook"}]
+
+
+@pytest.mark.parametrize(
+    "key", ["accountcode", "accountnumber", "accountno", "account", "customercode"]
+)
+def test_account_fields_get_the_placeholder_and_are_scrubbed_elsewhere(
+    key: str,
+) -> None:
+    result = anonymise_responses(
+        {
+            "a.json": {"Data": {key: "48213977"}},
+            "e.json": {"Result": "0", "Message": "Account 48213977 suspended"},
+        }
+    )
+    assert result["a.json"]["Data"][key] == "00000000"
+    assert result["e.json"]["Message"] == "Account 00000000 suspended"
+
+
+def test_six_character_account_code_is_scrubbed_after_a_decimal_point() -> None:
+    assert _probe({"Account_Code": "483921"}, "rate 1.483921") == "rate 1.00000000"
+
+
+def test_short_account_code_does_not_touch_decimals() -> None:
+    assert _probe({"Account_Code": "4821"}, "rate 10.48215") == "rate 10.48215"
+
+
+@pytest.mark.parametrize(
+    ("key", "placeholder"),
+    [
+        ("customername", "Example Customer"),
+        ("contactname", "Example Customer"),
+        ("fullname", "Example Customer"),
+        ("companyname", "Example Ltd"),
+        ("firstname", "Example"),
+        ("lastname", "Customer"),
+    ],
+)
+def test_person_fields_get_their_placeholder(key: str, placeholder: str) -> None:
+    result = anonymise_responses({"p.json": {"Data": {key: "Jane Exampleton"}}})
+    assert result["p.json"]["Data"][key] == placeholder
+
+
+def test_three_letter_name_parts_are_scrubbed_but_not_inside_longer_words() -> None:
+    message = _probe({"CustomerName": "Ann Exampleton"}, "Hi Ann, Annual Exampleton")
+    assert message == "Hi Example, Annual Example"
+
+
+def test_full_name_is_scrubbed_even_when_its_parts_are_glued_to_other_text() -> None:
+    message = _probe({"CustomerName": "Jane Exampleton"}, "ToJane Exampleton2")
+    assert message == "ToExample Customer2"
+
+
+@pytest.mark.parametrize(
+    "word", ["the", "and", "ltd", "limited", "plc", "llp", "inc", "company", "mrs"]
+)
+def test_name_stopwords_are_not_scrubbed_elsewhere(word: str) -> None:
+    message = _probe({"CompanyName": f"Widgetco {word}"}, f"one {word} two")
+    assert message == f"one {word} two"
+
+
+def test_shorter_learned_values_do_not_split_longer_ones() -> None:
+    message = _probe(
+        [{"FirstName": "Jane"}, {"CustomerName": "Jane Exampleton"}],
+        "Hi Jane Exampleton",
+    )
+    assert message == "Hi Example Customer"
+
+
+@pytest.mark.parametrize("key", ["login", "username"])
+def test_login_fields_get_the_placeholder_and_are_scrubbed_elsewhere(
+    key: str,
+) -> None:
+    result = anonymise_responses(
+        {
+            "a.json": {"Data": {key: "portal-user-77"}},
+            "e.json": {"Result": "0", "Message": "Login portal-user-77 refused"},
+        }
+    )
+    assert result["a.json"]["Data"][key] == "example-login"
+    assert result["e.json"]["Message"] == "Login example-login refused"
+
+
+@pytest.mark.parametrize("key", ["useragent", "agent", "ua"])
+def test_user_agent_fields_get_the_placeholder(key: str) -> None:
+    result = anonymise_responses({"r.json": {"Data": {key: "Yealink SIP-T46U"}}})
+    assert result["r.json"]["Data"][key] == "example-user-agent-1"
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "mac",
+        "macaddress",
+        "deviceid",
+        "device",
+        "serial",
+        "serialnumber",
+        "imei",
+        "contact",
+        "sipcontact",
+    ],
+)
+def test_device_fields_get_the_placeholder(key: str) -> None:
+    result = anonymise_responses({"r.json": {"Data": {key: "yealinkpbx"}}})
+    assert result["r.json"]["Data"][key] == "device-1"
+
+
+def test_device_value_is_scrubbed_inside_a_longer_token() -> None:
+    message = _probe({"DeviceID": "yealinkpbx"}, "on yealinkpbxlounge")
+    assert message == "on device-1lounge"
+
+
+def test_mac_address_in_free_text_is_replaced() -> None:
+    assert _probe({}, "phone 80:5e:c0:12:34:56 seen") == "phone device-1 seen"
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "id",
+        "uniqueid",
+        "userid",
+        "editid",
+        "originid",
+        "webhookid",
+        "recordid",
+        "smsid",
+        "cdrid",
+        "customerid",
+        "accountid",
+        "subscriberid",
+        "phoneid",
+        "lineid",
+        "groupid",
+        "callid",
+        "sessionid",
+        "profileid",
+        "uuid",
+        "guid",
+        "invoice_id",
+        "InvoiceID",
+        "InvoiceId",
+    ],
+)
+def test_id_fields_are_replaced(key: str) -> None:
+    result = anonymise_responses({"r.json": {"Data": {key: "webhook-7731"}}})
+    assert result["r.json"]["Data"][key] == "id-1"
+
+
+def test_numeric_ids_are_numbered_in_order_and_zero_is_kept() -> None:
+    result = anonymise_responses(
+        {"r.json": {"Data": [{"id": 9917345}, {"id": 1}, {"id": 0}, {"id": "0"}]}}
+    )
+    assert result["r.json"]["Data"] == [{"id": 1}, {"id": 2}, {"id": 0}, {"id": "0"}]
+
+
+def test_ids_are_scrubbed_elsewhere_and_short_ones_are_left_alone() -> None:
+    result = anonymise_responses(
+        {
+            "r.json": {"Data": [{"id": "4821"}, {"id": "7"}]},
+            "s.json": {"Data": {"Ref": "4821", "Count": "7", "7": "x", "4821": "y"}},
+            "e.json": {"Result": "0", "Message": "ref 4821 and 7"},
+        }
+    )
+    assert result["s.json"]["Data"] == {"Ref": "1", "Count": "7", "7": "x", "1": "y"}
+    assert result["e.json"]["Message"] == "ref 1 and 7"
+
+
+def test_id_in_a_key_is_scrubbed() -> None:
+    result = anonymise_responses(
+        {"r.json": {"Data": {"userid": "9917345", "row_9917345": "1"}}}
+    )
+    assert result["r.json"]["Data"] == {"userid": "1", "row_1": "1"}
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "servicename",
+        "aparty",
+        "bparty",
+        "from",
+        "to",
+        "line",
+        "cli",
+        "callerid",
+        "destination",
+        "BackupNumber",
+        "HomePhone",
+        "WorkMobile",
+        "OfficeFax",
+        "Landline",
+    ],
+)
+def test_number_fields_replace_bare_international_numbers(key: str) -> None:
+    result = anonymise_responses({"c.json": {"Data": {key: "33199000001"}}})
+    assert result["c.json"]["Data"][key] == "441632960000"
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (770090012, 1632960000),
+        (447700900, 441632960000),
+        (33199000001, 441632960000),
+        (447700900344, 441632960000),
+        (7700900344.0, 1632960000.0),
+        (201, 201),
+    ],
+)
+def test_integer_numbers_in_number_fields(raw: float, expected: float) -> None:
+    result = anonymise_responses({"c.json": {"Data": {"Mobile": raw}}})
+    assert result["c.json"]["Data"]["Mobile"] == expected
+
+
+def test_booleans_and_fractional_numbers_are_kept() -> None:
+    data = {"Data": {"Balance": False, "id": True, "Rate": 0.05, "Mobile": 0.5}}
+    assert anonymise_responses({"b.json": data}) == {"b.json": data}
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("+447700900344", "+441632960000"),
+        ("00447700900344", "00441632960000"),
+        ("(07700) 900344", "01632960000"),
+        ("447700900344", "441632960000"),
+    ],
+)
+def test_number_prefix_style_is_kept(raw: str, expected: str) -> None:
+    result = anonymise_responses({"c.json": {"Data": {"Mobile": raw}}})
+    assert result["c.json"]["Data"]["Mobile"] == expected
+
+
+def test_bare_national_digits_are_scrubbed_inside_a_token() -> None:
+    message = _probe({"Mobile": "+447700900344"}, "ref7700900344 or 7700900344")
+    assert message == "ref1632960000 or 1632960000"
+
+
+def test_invalid_international_looking_number_is_left_alone() -> None:
+    assert _probe({}, "dial +0 1234 5678") == "dial +0 1234 5678"
+
+
+def test_international_number_in_a_key_is_replaced() -> None:
+    result = anonymise_responses({"s.json": {"Data": {"+33 1 99 00 00 01": "1"}}})
+    assert result["s.json"]["Data"] == {"+441632960000": "1"}
+
+
+@pytest.mark.parametrize("key", ["linenumber", "line", "servicename"])
+def test_line_rows_name_the_line(key: str) -> None:
+    result = anonymise_responses(
+        {
+            "n.json": {
+                "Data": [
+                    {key: "07700900344", "Name": "Office", "Alias": "Den"},
+                    {key: "07700900345", "DisplayName": "Study"},
+                ]
+            }
+        }
+    )
+    assert result["n.json"]["Data"] == [
+        {key: "01632960000", "Name": "Line 1", "Alias": "Line 2"},
+        {key: "01632960001", "DisplayName": "Line 3"},
+    ]
+
+
+def test_line_name_fields_name_the_line_outside_line_rows() -> None:
+    result = anonymise_responses({"n.json": {"Data": {"LineName": "Office"}}})
+    assert result["n.json"]["Data"] == {"LineName": "Line 1"}
+
+
+def test_line_names_are_scrubbed_elsewhere_unless_generic() -> None:
+    message = _probe(
+        [{"Parameter_4": "Office Desk"}, {"Parameter_4": "Line 7"}],
+        "call Office Desk or Line 7",
+    )
+    assert message == "call Line 1 or Line 7"
+
+
+def test_plain_name_outside_line_and_webhook_rows_is_kept() -> None:
+    result = anonymise_responses({"n.json": {"Data": {"Name": "Office"}}})
+    assert result["n.json"]["Data"] == {"Name": "Office"}
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "servicename",
+        "prefname",
+        "preferencename",
+        "filename",
+        "hostname",
+        "typename",
+        "fieldname",
+        "parametername",
+        "settingname",
+        "headername",
+        "voicename",
+        "planname",
+        "productname",
+        "bundlename",
+        "packagename",
+    ],
+)
+def test_technical_name_fields_are_kept(key: str) -> None:
+    result = anonymise_responses({"t.json": {"Data": {key: "Voice"}}})
+    assert result["t.json"]["Data"] == {key: "Voice"}
+
+
+@pytest.mark.parametrize(
+    ("key", "raw", "expected"),
+    [
+        ("EmailAddress", "jane@mail.test", "user1@example.com"),
+        ("IPAddress", "203.0.113.160", "192.0.2.1"),
+        ("IPv6Address", "2001:db8::1", "192.0.2.1"),
+        ("BtMacAddress", "80:5e:c0:12:34:56", "device-1"),
+        ("WebAddress", "www.widgetco.test", "host1.example.invalid"),
+        ("UrlAddress", "https://widgetco.test/a", "https://example.invalid/1"),
+    ],
+)
+def test_contact_addresses_are_not_postal_addresses(
+    key: str, raw: str, expected: str
+) -> None:
+    result = anonymise_responses({"c.json": {"Data": {key: raw, "Status": "Active"}}})
+    assert result["c.json"]["Data"] == {key: expected, "Status": "Active"}
+
+
+@pytest.mark.parametrize(
+    ("key", "placeholder"),
+    [
+        ("building", "Example House"),
+        ("buildingname", "Example House"),
+        ("buildingnumber", "1"),
+        ("streetnumber", "1"),
+        ("housenumber", "1"),
+        ("city", "Exampletown"),
+        ("town", "Exampletown"),
+        ("postcode", "ZZ99 9ZZ"),
+        ("postalcode", "ZZ99 9ZZ"),
+        ("zipcode", "ZZ99 9ZZ"),
+        ("homeaddress", "Example Street"),
+        ("streetname", "Example Street"),
+        ("suburb", "Example Suburb"),
+    ],
+)
+def test_address_fields_get_their_placeholder(key: str, placeholder: str) -> None:
+    result = anonymise_responses({"c.json": {"Data": {key: "Widgetville"}}})
+    assert result["c.json"]["Data"] == {key: placeholder}
+
+
+@pytest.mark.parametrize(
+    ("key", "placeholder"),
+    [
+        ("flat", "Flat 1"),
+        ("flatnumber", "Flat 1"),
+        ("unit", "Flat 1"),
+        ("unitnumber", "Flat 1"),
+        ("apartment", "Flat 1"),
+        ("district", "Example Suburb"),
+        ("locality", "Example Suburb"),
+        ("state", "Example County"),
+        ("county", "Example County"),
+        ("region", "Example County"),
+        ("province", "Example County"),
+        ("zip", "ZZ99 9ZZ"),
+    ],
+)
+def test_ambiguous_address_fields_need_an_address_in_the_record(
+    key: str, placeholder: str
+) -> None:
+    result = anonymise_responses(
+        {
+            "a.json": {"Data": {"Street": "Widget Road", key: "Widgetville"}},
+            "b.json": {"Data": {key: "Widgetville"}},
+        }
+    )
+    assert result["a.json"]["Data"] == {"Street": "Example Street", key: placeholder}
+    assert result["b.json"]["Data"] == {key: "Widgetville"}
+
+
+def test_address_parts_are_scrubbed_elsewhere() -> None:
+    message = _probe(
+        {"BillingAddress": "42 Widget Road, Widgetville"},
+        "near Widget Road in Widgetville",
+    )
+    assert message == "near Example Street in Example Street"
+
+
+def test_learned_words_do_not_rewrite_longer_words() -> None:
+    message = _probe(
+        {
+            "Login": "jane",
+            "BillingGroup": "Oak",
+            "BillingAddress": "7 Mill, Lane",
+            "Parameter_4": "Den",
+            "id": "abcd",
+        },
+        "janet Oakley Millbrook Lanes Denver abcde",
+    )
+    assert message == "janet Oakley Millbrook Lanes Denver abcde"
+
+
+def test_url_is_scrubbed_inside_a_longer_token() -> None:
+    message = _probe(
+        {"RecordingURL": "https://cdn.widgetco.test/rec/998877.mp3"},
+        "see 9https://cdn.widgetco.test/rec/998877.mp3",
+    )
+    assert message == "see 9https://example.invalid/1"
+
+
+def test_placeholder_hosts_are_kept_and_other_hosts_numbered() -> None:
+    message = _probe(
+        {}, "see host7.example.invalid, www.example.com and pbx.widgetco.test"
+    )
+    assert (
+        message
+        == "see host7.example.invalid, www.example.com and host1.example.invalid"
+    )
+
+
+def test_mail_field_keeps_a_list_of_safe_addresses() -> None:
+    result = anonymise_responses(
+        {"m.json": {"Data": {"copy_emails": "a@mail.test,b@mail.test"}}}
+    )
+    assert result["m.json"]["Data"] == {
+        "copy_emails": "user1@example.com,user2@example.com"
+    }
+
+
+def test_list_items_get_no_record_context() -> None:
+    data = {
+        "Name": ["Office"],
+        "State": ["Active"],
+        "Message": ["Called back by Jane Exampleton"],
+    }
+    result = anonymise_responses({"l.json": {"Result": "1", "Data": data}})
+    assert result["l.json"]["Data"] == {
+        "Name": ["Office"],
+        "State": ["Active"],
+        "Message": ["[REDACTED]"],
+    }
+
+
+CALLED_BACK = {"Result": "1", "Message": "Called back by Jane Exampleton"}
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"Data": {"Row": CALLED_BACK}},
+        {"Data": [CALLED_BACK]},
+        {"Extra": json.dumps(CALLED_BACK)},
+    ],
+)
+def test_only_the_top_two_levels_can_be_an_envelope(data: dict[str, Any]) -> None:
+    out = _dump({"f.json": data})
+    assert "Jane" not in out
+    assert "[REDACTED]" in out
+
+
+def test_top_level_list_and_json_string_files_can_hold_envelopes() -> None:
+    envelope = {"Result": "1", "Message": "Method Executed Successfully."}
+    files = {"a.json": [envelope], "b.json": json.dumps(envelope)}
+    result = anonymise_responses(files)
+    assert result["a.json"] == [envelope]
+    assert json.loads(result["b.json"]) == envelope
+
+
+def test_json_in_a_string_keeps_non_ascii_text() -> None:
+    result = anonymise_responses({"s.json": {"Data": {"Settings": '{"tz":"Zürich"}'}}})
+    assert result["s.json"]["Data"]["Settings"] == '{"tz":"Zürich"}'
+
+
+def test_additional_details_without_content_are_kept() -> None:
+    result = anonymise_responses(
+        {"a.json": {"Data": {"AdditionalDetails": '["", null]'}}}
+    )
+    assert result["a.json"]["Data"]["AdditionalDetails"] == '["",null]'
+
+
+def test_time_range_is_not_free_text() -> None:
+    result = anonymise_responses(
+        {"t.json": {"Data": {"Seen": "2025-03-04 10:11:12 - 2025-03-05 10:11:12"}}}
+    )
+    assert (
+        result["t.json"]["Data"]["Seen"] == "2026-01-01 10:11:12 - 2026-01-01 10:11:12"
+    )
+
+
+def test_leak_error_names_the_paths() -> None:
+    with pytest.raises(anonymise.LeakError) as exc:
+        anonymise_responses(
+            {"f.json": {"Data": {"Ref": "123456789012", "Alt": "210987654321"}}}
+        )
+    assert str(exc.value) == (
+        "Anonymised output failed the leak check at: f.json.Data.Ref, f.json.Data.Alt"
+    )
+
+
+def test_leak_check_flags_keys_holding_learned_contact_details() -> None:
+    anonymiser = anonymise.Anonymiser(secrets=("Zq7xK9mW",))
+    anonymiser.anonymise(
+        {
+            "Account_Code": "48213977",
+            "Login": "portal-user-77",
+            "DeviceID": "yealinkpbx",
+            "RecordingURL": "https://www.example.com/rec/1",
+            "Email": "jane@mail.test",
+            "Server": "pbx.widgetco.test",
+            "ContactIP": "203.0.113.160",
+            "Mobile": "07700 900344",
+            "userid": "9917345",
+        }
+    )
+    keys = [
+        "Zq7xK9mW",
+        "48213977",
+        "portal-user-77",
+        "yealinkpbx",
+        "https://www.example.com/rec/1",
+        "jane@mail.test",
+        "pbx.widgetco.test",
+        "203.0.113.160",
+        "07700 900344",
+        "row_9917345",
+    ]
+    paths = anonymiser.find_leaks({"a.json": dict.fromkeys(keys, "1")})
+    assert paths == [f"a.json.<key {index}>" for index in range(len(keys))]
+
+
+def test_leak_check_only_treats_the_top_two_levels_as_envelopes() -> None:
+    envelope = {"Result": "1", "Message": "Method Executed Successfully."}
+    paths = anonymise.Anonymiser().find_leaks(
+        {
+            "a.json": {"Data": {"Row": CALLED_BACK}},
+            "b.json": {"Data": [CALLED_BACK]},
+            "c.json": {"Extra": json.dumps(CALLED_BACK)},
+            "d.json": {"Data": {"Message": ["Called back by Jane Exampleton"]}},
+            "e.json": [envelope],
+            "f.json": json.dumps(envelope),
+        }
+    )
+    assert paths == [
+        "a.json.Data.Row.Message",
+        "b.json.Data[0].Message",
+        "c.json.Extra<json>.Message",
+        "d.json.Data.Message[0]",
+    ]
+
+
+def test_bare_national_digits_in_a_key_are_replaced() -> None:
+    result = anonymise_responses(
+        {"s.json": {"Data": {"Mobile": "+447700900344", "ref7700900344": "1"}}}
+    )
+    assert result["s.json"]["Data"] == {
+        "Mobile": "+441632960000",
+        "ref1632960000": "1",
+    }
+
+
+def test_secret_pref_record_value_is_scrubbed_elsewhere() -> None:
+    message = _probe([{"pref": "voicemail_pin", "value": "8642"}], "pin 8642")
+    assert message == "pin [REDACTED]"
+
+
+def test_redacted_free_text_is_scrubbed_elsewhere() -> None:
+    message = _probe({"Note": "Jane Exampleton"}, "Hi Jane Exampleton")
+    assert message == "Hi [REDACTED]"
+
+
+def test_whole_address_and_numbered_parts_are_scrubbed_elsewhere() -> None:
+    message = _probe(
+        {"BillingAddress": "42 Widget Road, Widgetville"},
+        "to 42 Widget Road, Widgetville or 42 Widget Road",
+    )
+    assert message == "to Example Street or Example Street"
+
+
+def test_url_and_email_hosts_are_scrubbed_after_a_slash() -> None:
+    message = _probe(
+        {
+            "RecordingURL": "https://cdn.widgetco.test/rec/1",
+            "Email": "jane@mail.widgetco.test",
+        },
+        "mirrors files/cdn.widgetco.test and files/mail.widgetco.test",
+    )
+    assert message == (
+        "mirrors files/host1.example.invalid and files/host2.example.invalid"
+    )

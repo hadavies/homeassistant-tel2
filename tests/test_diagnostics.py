@@ -293,3 +293,45 @@ def test_json_safe_converts_nested_values() -> None:
 
 def test_sanitise_leaves_non_string_keys_alone() -> None:
     assert _sanitise_tel2({1: "x", "status": "1"}, None) == {1: "x", "status": "1"}
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "account_code",
+        "from_number",
+        "to_number",
+        "do_not_disturb_forward",
+        "voicemail_sms_alert",
+        "sip_password",
+        "db_passwd",
+        "line_pin",
+        "shared_secret_value",
+        "door_access_code",
+        "portal_login",
+    ],
+)
+def test_sanitise_redacts_named_and_secret_like_keys_with_plain_values(
+    key: str,
+) -> None:
+    assert _sanitise_tel2({key: "ACME12"}, None) == {key: "**REDACTED**"}
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("1234567", "**REDACTED**"), ("123456", "123456"), ("12-34-56", "12-34-56")],
+)
+def test_sanitise_redacts_runs_of_seven_digits(value: str, expected: str) -> None:
+    assert _sanitise_tel2({"note": value}, None) == {"note": expected}
+
+
+def test_sanitise_aliases_the_tel2_id_form() -> None:
+    aliasing = _alias_pattern(["441632960001"], {"441632960001": "1632960001"})
+
+    assert _sanitise_tel2({"id": "1632960001"}, aliasing) == {"id": "line_1"}
+
+
+def test_sanitise_aliases_numbers_without_a_tel2_id() -> None:
+    aliasing = _alias_pattern(["441632960001"], {})
+
+    assert _sanitise_tel2({"n": "01632 960001"}, aliasing) == {"n": "line_1"}

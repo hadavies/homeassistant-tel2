@@ -263,3 +263,14 @@ async def test_device_removal_refused_while_not_loaded(
     assert await hass.config_entries.async_unload(entry.entry_id)
 
     assert not await async_remove_config_entry_device(hass, entry, removed)
+
+
+async def test_device_removal_refused_for_a_device_without_tel2_identifiers(
+    hass: HomeAssistant, fake_tel2: FakeTel2Api
+) -> None:
+    entry = await async_setup_integration(hass, fake_tel2)
+    foreign = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id, identifiers={("other", "abc")}
+    )
+
+    assert not await async_remove_config_entry_device(hass, entry, foreign)

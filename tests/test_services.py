@@ -19,7 +19,10 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components import tel2
 from custom_components.tel2.const import DOMAIN
-from custom_components.tel2.services import async_setup_services
+from custom_components.tel2.services import (
+    SET_LINE_SETTING_SCHEMA,
+    async_setup_services,
+)
 from tests.fake_tel2 import FakeTel2Api
 from tests.fixture_loader import TEST_ENTRY_ID
 from tests.helpers import (
@@ -286,3 +289,9 @@ async def test_action_is_registered_once_for_two_entries(
 
     await hass.config_entries.async_unload(first.entry_id)
     assert hass.services.has_service(DOMAIN, SERVICE)
+
+
+def test_single_character_pref_is_valid_and_stripped() -> None:
+    data = SET_LINE_SETTING_SCHEMA({"device_id": "abc", "pref": " x ", "value": "1"})
+
+    assert data["pref"] == "x"
