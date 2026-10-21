@@ -3,7 +3,7 @@
 import asyncio
 from collections.abc import Callable, Iterable
 from dataclasses import replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
 from typing import Final
 
@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .api import Tel2ApiError, Tel2AuthError, Tel2Client, Tel2ConnectionError, Tel2Error
 from .const import (
@@ -35,6 +36,8 @@ _LOGGER = logging.getLogger(__name__)
 
 MAX_BUNDLE_CALLS: Final = 4
 ACCOUNT_MODEL: Final = "Account"
+# Get-All-Pref-Summary lags behind Set-Pref-Value, so a write is held until it shows.
+WRITE_HOLD: Final = timedelta(minutes=5)
 AUTH_FAILED_FALLBACK: Final = "Tel2 rejected the stored login"
 
 
@@ -211,6 +214,7 @@ class Tel2LinesCoordinator(DataUpdateCoordinator[LinesState]):
         )
         self.client = client
         self.account = account
+        self._held_writes: dict[tuple[str, str], tuple[str, datetime]] = {}
 
     async def _async_setup(self) -> None:
         """Follow the account so a new number gets its line state straight away."""
@@ -243,20 +247,30 @@ class Tel2LinesCoordinator(DataUpdateCoordinator[LinesState]):
             raise _update_error(err) from err
         registered = status.result()
         line_prefs = prefs.result()
-        return LinesState(
-            lines={
-                canonical: LineState(
-                    registered=canonical in registered,
-                    prefs=dict(line_prefs.get(canonical, {})),
-                )
-                for canonical in account.numbers
-            }
-        )
+        lines = {
+            canonical: LineState(
+                registered=canonical in registered,
+                prefs=dict(line_prefs.get(canonical, {})),
+            )
+            for canonical in account.numbers
+        }
+        self._apply_held_writes(lines)
+        return LinesState(lines=lines)
+
+    def _apply_held_writes(self, lines: dict[str, LineState]) -> None:
+        now = dt_util.utcnow()
+        for (canonical, pref), (value, until) in list(self._held_writes.items()):
+            line = lines.get(canonical)
+            if line is None or now >= until or line.prefs.get(pref) == value:
+                del self._held_writes[canonical, pref]
+            else:
+                line.prefs[pref] = value
 
     async def async_apply_optimistic(
         self, canonical: str, pref: str, value: str
     ) -> None:
         """Show a pref Tel2 has accepted straight away, then refresh to confirm."""
+        self._held_writes[canonical, pref] = (value, dt_util.utcnow() + WRITE_HOLD)
         current: LinesState | None = self.data
         if current is not None and (line := current.lines.get(canonical)):
             updated = replace(line, prefs={**line.prefs, pref: value})

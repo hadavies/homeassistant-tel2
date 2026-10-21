@@ -365,6 +365,39 @@ async def test_optimistic_update_changes_only_that_pref(
     assert before.lines[LINE_1].prefs[PREF_ANONYMOUS_REJECT] == PREF_VALUE_OFF
 
 
+async def test_written_pref_survives_a_stale_read(
+    loaded: Tel2LinesCoordinator,
+) -> None:
+    await loaded.async_apply_optimistic(LINE_1, PREF_DO_NOT_DISTURB, PREF_VALUE_ON)
+    await loaded.async_refresh()
+
+    assert loaded.data.lines[LINE_1].prefs[PREF_DO_NOT_DISTURB] == PREF_VALUE_ON
+
+
+async def test_tel2_wins_once_the_hold_on_a_write_expires(
+    loaded: Tel2LinesCoordinator, freezer: FrozenDateTimeFactory
+) -> None:
+    await loaded.async_apply_optimistic(LINE_1, PREF_DO_NOT_DISTURB, PREF_VALUE_ON)
+
+    freezer.tick(timedelta(minutes=6))
+    await loaded.async_refresh()
+
+    assert loaded.data.lines[LINE_1].prefs[PREF_DO_NOT_DISTURB] == PREF_VALUE_OFF
+
+
+async def test_confirmed_write_stops_holding_the_value(
+    loaded: Tel2LinesCoordinator, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond("Get-All-Pref-Summary", "get_all_pref_summary_all_on.json")
+    await loaded.async_apply_optimistic(LINE_1, PREF_DO_NOT_DISTURB, PREF_VALUE_ON)
+    await loaded.async_refresh()
+
+    fake_tel2.respond("Get-All-Pref-Summary", "get_all_pref_summary.json")
+    await loaded.async_refresh()
+
+    assert loaded.data.lines[LINE_1].prefs[PREF_DO_NOT_DISTURB] == PREF_VALUE_OFF
+
+
 async def test_upstream_pref_change_shows_after_refresh(
     loaded: Tel2LinesCoordinator,
     fake_tel2: FakeTel2Api,

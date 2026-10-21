@@ -134,8 +134,8 @@ async def test_saved_destination_shows_before_the_refresh(
     await set_value(hass, LINE_1, "+44 7700 900123")
     await hass.async_block_till_done()
 
-    # The fixture refresh still has no destination, so Tel2's value wins after it.
-    assert seen == ["07700900123", STATE_UNKNOWN]
+    # The fixture refresh still has no destination, like Tel2's lagging read.
+    assert seen == ["07700900123"]
     assert fake_tel2.call_count("Get-All-Pref-Summary") == refreshes + 1
 
 

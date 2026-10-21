@@ -385,7 +385,7 @@ async def test_external_change_shows_after_lines_refresh(
         assert all(state_of(hass, key, line) == STATE_ON for key in SWITCH_KEYS)
 
 
-async def test_refresh_in_flight_during_a_write_shows_what_tel2_returned(
+async def test_refresh_in_flight_during_a_write_keeps_the_written_value(
     hass: HomeAssistant, fake_tel2: FakeTel2Api
 ) -> None:
     entry = await async_setup_integration(hass, fake_tel2)
@@ -410,5 +410,5 @@ async def test_refresh_in_flight_during_a_write_shows_what_tel2_returned(
     await in_flight
     await hass.async_block_till_done()
 
-    assert lines.data.lines[LINE_1].prefs["do_not_disturb_status"] == "0"
-    assert state_of(hass, "do_not_disturb") == STATE_OFF
+    assert lines.data.lines[LINE_1].prefs["do_not_disturb_status"] == "1"
+    assert state_of(hass, "do_not_disturb") == STATE_ON
