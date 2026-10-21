@@ -267,7 +267,7 @@ def test_pref_variants_switch_states() -> None:
     for row in off_rows:
         assert {row[pref] for pref in switches} == {PREF_VALUE_OFF}
         assert row["profile_recordingenabled"] == PREF_VALUE_OFF
-        assert row["callrecording_disabled"] == PREF_VALUE_OFF
+        assert row["callrecording_disabled"] == PREF_VALUE_ON
         assert row[PREF_FORWARD_ALWAYS_NUMBER] is None
     for row in on_rows:
         assert {row[pref] for pref in switches} == {PREF_VALUE_ON}

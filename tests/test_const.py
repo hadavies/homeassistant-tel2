@@ -7,7 +7,7 @@ from custom_components.tel2.const import (
     AUTH_ERROR_PATTERNS,
     CALL_EVENT_TYPES,
     PERSONAL_PREF_FIELDS,
-    PREF_RECORDING_ENABLED,
+    PREF_RECORDING_DISABLED,
     PREF_VALUE_OFF,
     PREF_VALUE_ON,
     SECRET_PREFS,
@@ -80,7 +80,7 @@ def test_pref_values_are_documented_strings() -> None:
 
 
 def test_recording_state_pref_is_the_captured_profile_flag() -> None:
-    assert PREF_RECORDING_ENABLED == "profile_recordingenabled"
+    assert PREF_RECORDING_DISABLED == "callrecording_disabled"
 
 
 def test_auth_error_patterns_are_lower_case() -> None:

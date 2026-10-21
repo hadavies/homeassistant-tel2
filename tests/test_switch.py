@@ -160,10 +160,10 @@ async def test_switches_read_state_from_prefs(
     ("pref", "value", "expected"),
     [
         ("do_not_disturb_status", "1", STATE_ON),
-        ("profile_recordingenabled", "1", STATE_ON),
-        ("profile_recordingenabled", "0", STATE_OFF),
-        ("callrecording_disabled", "0", STATE_OFF),
+        ("callrecording_disabled", "0", STATE_ON),
         ("callrecording_disabled", "1", STATE_OFF),
+        ("callrecording_disabled", "", STATE_OFF),
+        ("profile_recordingenabled", "1", STATE_OFF),
     ],
 )
 async def test_each_switch_follows_only_its_own_pref(
@@ -244,7 +244,7 @@ async def test_recording_uses_its_own_actions(
         ("do_not_disturb", "do_not_disturb_status", "1"),
         ("call_forward_always", "callforward_always_status", "1"),
         ("anonymous_reject", "anoncall_reject", "1"),
-        ("call_recording", "profile_recordingenabled", "1"),
+        ("call_recording", "callrecording_disabled", "0"),
     ],
 )
 async def test_turn_on_shows_on_before_any_refresh(

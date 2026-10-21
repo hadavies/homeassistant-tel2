@@ -125,7 +125,7 @@ async def test_all_prefs_are_keyed_by_canonical_number_without_secrets(
     assert line["do_not_disturb_status"] == ""
 
 
-async def test_recording_switch_reads_off_from_the_captured_prefs(
+async def test_recording_switch_reads_on_from_the_captured_prefs(
     client: Tel2Client, fake_tel2: FakeTel2Api
 ) -> None:
     fake_tel2.respond("Get-All-Pref-Summary", captured("get_all_pref_summary.json"))
@@ -134,7 +134,7 @@ async def test_recording_switch_reads_off_from_the_captured_prefs(
     recording = next(d for d in SWITCHES if d.key == "call_recording")
 
     assert prefs["callrecording_disabled"] == "0"
-    assert recording.is_on_fn(prefs) is False
+    assert recording.is_on_fn(prefs) is True
 
 
 async def test_empty_subscriber_status_and_webhooks(

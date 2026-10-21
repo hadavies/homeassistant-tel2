@@ -76,8 +76,9 @@ PREF_DO_NOT_DISTURB: Final = "do_not_disturb_status"
 PREF_FORWARD_ALWAYS: Final = "callforward_always_status"
 PREF_FORWARD_ALWAYS_NUMBER: Final = "callforward_always_number"
 PREF_ANONYMOUS_REJECT: Final = "anoncall_reject"
-# Provisional: confirm by toggling recording in the live test.
-PREF_RECORDING_ENABLED: Final = "profile_recordingenabled"
+# Inverted, "0" is recording on. Enable-/Disable-Recording flip this one, not
+# profile_recordingenabled.
+PREF_RECORDING_DISABLED: Final = "callrecording_disabled"
 
 
 class CallEventType(StrEnum):

@@ -77,7 +77,7 @@
       "file": "get_all_pref_summary.json",
       "action": "Get-All-Pref-Summary",
       "source": "synthetic",
-      "description": "Get-All-Pref-Summary with every switch pref off (callrecording_disabled 0, as captured), including fake secret and personal fields."
+      "description": "Get-All-Pref-Summary with every switch pref off (callrecording_disabled 1 is recording off), including fake secret and personal fields."
     },
     {
       "file": "get_all_pref_summary_all_on.json",
@@ -89,7 +89,7 @@
       "file": "get_all_pref_summary_number_added.json",
       "action": "Get-All-Pref-Summary",
       "source": "synthetic",
-      "description": "Get-All-Pref-Summary after a third number is added, every switch pref off (callrecording_disabled 0, as captured)."
+      "description": "Get-All-Pref-Summary after a third number is added, every switch pref off (callrecording_disabled 1 is recording off)."
     },
     {
       "file": "get_webhooks.json",
