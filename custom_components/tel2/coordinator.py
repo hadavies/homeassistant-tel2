@@ -22,6 +22,7 @@ from .const import (
     MANUFACTURER,
 )
 from .models import (
+    AccountBalance,
     AccountState,
     BundleUsage,
     CustomerDetails,
@@ -33,6 +34,7 @@ from .models import (
 _LOGGER = logging.getLogger(__name__)
 
 MAX_BUNDLE_CALLS: Final = 4
+ACCOUNT_MODEL: Final = "Account"
 AUTH_FAILED_FALLBACK: Final = "Tel2 rejected the stored login"
 
 
@@ -58,6 +60,7 @@ class Tel2AccountCoordinator(DataUpdateCoordinator[AccountState]):
         self._known_numbers: set[str] | None = None
         self._warned_no_numbers = False
         self._refresh_listeners: list[Callable[[], None]] = []
+        self._setup_details: CustomerDetails | None = None
 
     @property
     def account_device_id(self) -> str:
@@ -84,21 +87,19 @@ class Tel2AccountCoordinator(DataUpdateCoordinator[AccountState]):
     async def _async_setup(self) -> None:
         """Create or update the account device before the first refresh."""
         try:
-            async with asyncio.TaskGroup() as group:
-                details = group.create_task(self.client.async_get_customer_details())
-                plan = group.create_task(self.client.async_get_current_plan())
-        except ExceptionGroup as err:
+            details = await self.client.async_get_customer_details()
+        except Tel2Error as err:
             raise _update_error(err) from err
-        current_plan = plan.result()
         device = dr.async_get(self.hass).async_get_or_create(
             config_entry_id=self.config_entry.entry_id,
-            identifiers={(DOMAIN, details.result().account_code)},
+            identifiers={(DOMAIN, details.account_code)},
             manufacturer=MANUFACTURER,
             entry_type=dr.DeviceEntryType.SERVICE,
-            name=_account_name(details.result()),
-            model=(current_plan.description or None) if current_plan else None,
+            name=account_name(details),
+            model=ACCOUNT_MODEL,
         )
         self._account_device_id = device.id
+        self._setup_details = details
 
     async def _async_update_data(self) -> AccountState:
         """Fetch the account state from Tel2."""
@@ -110,14 +111,24 @@ class Tel2AccountCoordinator(DataUpdateCoordinator[AccountState]):
         return state
 
     async def _async_fetch(self) -> AccountState:
+        # The first refresh holds up setup, and Tel2 takes seconds to answer
+        # Get-Account-Balance, so setup skips it and refreshes again once loaded.
+        setup_details, self._setup_details = self._setup_details, None
+        balance: asyncio.Task[AccountBalance] | None = None
         async with asyncio.TaskGroup() as group:
-            details = group.create_task(self.client.async_get_customer_details())
-            balance = group.create_task(self.client.async_get_account_balance())
+            details = group.create_task(
+                _known(setup_details)
+                if setup_details
+                else self.client.async_get_customer_details()
+            )
             plan = group.create_task(self.client.async_get_current_plan())
             numbers = group.create_task(self.client.async_get_numbers())
+            if setup_details is None:
+                # Last, as Tel2 seems to answer one request at a time.
+                balance = group.create_task(self.client.async_get_account_balance())
         return AccountState(
             details=details.result(),
-            balance=balance.result(),
+            balance=balance.result() if balance else None,
             plan=plan.result(),
             numbers={number.canonical: number for number in numbers.result()},
             bundles=await self._async_fetch_bundles(numbers.result()),
@@ -255,7 +266,12 @@ class Tel2LinesCoordinator(DataUpdateCoordinator[LinesState]):
         await self.async_request_refresh()
 
 
-def _account_name(details: CustomerDetails) -> str:
+async def _known[T](value: T) -> T:
+    return value
+
+
+def account_name(details: CustomerDetails) -> str:
+    """Return the name the account device is shown under."""
     return details.company_name or details.customer_name or details.account_code
 
 

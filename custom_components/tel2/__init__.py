@@ -85,6 +85,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: Tel2ConfigEntry) -> bool
         account_device_id=account.account_device_id,
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    # The first refresh skipped the slow balance call.
+    entry.async_create_background_task(
+        hass, account.async_refresh(), "tel2 account balance"
+    )
     return True
 
 

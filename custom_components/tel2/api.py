@@ -47,10 +47,13 @@ _GET_NUMBERS_PARAMS: Final = {
     "searchterm": "",
 }
 _PROBES: Final[tuple[tuple[AccessContext, str], ...]] = (
-    ("account", "Get-Account-Balance"),
+    # Get-Account-Balance can take seconds to answer, so probe with a quick read.
+    ("account", "Get-Customer-Details"),
     ("voice", "Get-Subscriber-Status"),
     ("api", "Get-Webhooks"),
 )
+# Only call events use this context, so a broken answer there shouldn't block sign in.
+_OPTIONAL_PROBE_CONTEXTS: Final[frozenset[AccessContext]] = frozenset({"api"})
 # Prefs Tel2 adds later may carry credentials the constants do not list yet.
 _SECRET_KEY_PATTERNS: Final = (
     "password",
@@ -168,8 +171,8 @@ class Tel2Client:
         """Return the account balance in GBP."""
         row = _first_row(await self._call_required("account", "Get-Account-Balance"))
         return AccountBalance(
-            balance=_decimal(row, "Balance"),
-            available_balance=_decimal(row, "AvailableBalance"),
+            balance=_money(row, "Balance"),
+            available_balance=_money(row, "AvailableBalance"),
         )
 
     async def async_get_current_plan(self) -> PlanSummary | None:
@@ -336,6 +339,14 @@ class Tel2Client:
                 await self._call(context, action)
             except Tel2NoData:
                 continue
+            except Tel2ConnectionError as err:
+                if context not in _OPTIONAL_PROBE_CONTEXTS:
+                    raise
+                _LOGGER.warning(
+                    "Tel2 %s didn't answer properly, call events may not work: %s",
+                    action,
+                    err,
+                )
             except Tel2ApiError as err:
                 # A Get-Token failure says nothing about any context's access.
                 if err.context is None:
@@ -446,6 +457,9 @@ class Tel2Client:
             ) from err
         try:
             data = _parse_envelope(raw, status, context, action)
+        except Tel2ConnectionError as err:
+            _LOGGER.debug("Tel2 %s %s: %s", context or "-", action, err)
+            raise
         except Tel2Error as err:
             _LOGGER.debug("Tel2 %s %s: %s", context or "-", action, type(err).__name__)
             raise
@@ -463,7 +477,9 @@ def _parse_envelope(
             f"Tel2 {action} returned HTTP {status} without JSON"
         ) from err
     if not isinstance(envelope, dict) or "Result" not in envelope:
-        raise Tel2ConnectionError(f"Tel2 {action} returned an unexpected response")
+        raise Tel2ConnectionError(
+            f"Tel2 {action} returned an unexpected response (HTTP {status}, {_shape(envelope)})"
+        )
     result = str(envelope["Result"])
     message = str(envelope.get("Message") or "")
     if envelope.get("Status") == _SUCCESS:
@@ -474,6 +490,16 @@ def _parse_envelope(
     elif is_auth_message(message):
         raise Tel2AuthError(message)
     raise Tel2ApiError(message, context, action)
+
+
+def _shape(value: Any) -> str:
+    """Describe a response without its values, for logs."""
+    if isinstance(value, dict):
+        keys = ", ".join(sorted(str(key)[:30] for key in value)[:10])
+        return f"object with keys {keys}" if keys else "empty object"
+    if isinstance(value, list):
+        return f"list of {len(value)}"
+    return type(value).__name__
 
 
 def _rows(data: Any) -> list[Mapping[str, Any]]:
@@ -519,6 +545,16 @@ def _decimal(row: Mapping[str, Any], key: str) -> Decimal:
     if not value.is_finite() or (value and abs(value.adjusted()) > _MAX_MAGNITUDE):
         raise Tel2ConnectionError(f"Tel2 {key} is not a number")
     return value
+
+
+_PENCE: Final = Decimal("0.01")
+
+
+def _money(row: Mapping[str, Any], key: str) -> Decimal:
+    # Tel2 pads to 10 places, and a padded zero would show as "0E-10".
+    value = _decimal(row, key).normalize()
+    pence = value.quantize(_PENCE)
+    return pence if pence == value else value
 
 
 def _int(row: Mapping[str, Any], key: str) -> int:

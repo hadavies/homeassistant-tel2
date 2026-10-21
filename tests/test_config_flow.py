@@ -70,8 +70,10 @@ async def test_user_creates_entry(
     get_token = fake_tel2.requests_for("Get-Token")[0]
     assert get_token.body["login"] == "ha-login"
     assert get_token.body["password"] == "hunter2"
-    for action in ("Get-Account-Balance", "Get-Subscriber-Status", "Get-Webhooks"):
+    for action in ("Get-Subscriber-Status", "Get-Webhooks"):
         assert fake_tel2.call_count(action) == 1
+    assert fake_tel2.call_count("Get-Customer-Details") >= 1
+    assert fake_tel2.call_count("Get-Account-Balance") == 0
 
 
 @pytest.mark.parametrize(
@@ -81,7 +83,7 @@ async def test_user_creates_entry(
         ("Get-Token", aiohttp.ClientError(), "cannot_connect"),
         ("Get-Customer-Details", TimeoutError(), "cannot_connect"),
         ("Get-Token", "error_generic.json", "unknown"),
-        ("Get-Customer-Details", "error_generic.json", "unknown"),
+        ("Get-Customer-Details", "error_generic.json", "insufficient_access"),
     ],
 )
 async def test_user_errors_then_recovers(
@@ -117,7 +119,7 @@ def default_response(action: str) -> str:
             {
                 "voice": "Get-Subscriber-Status",
                 "api": "Get-Webhooks",
-                "account": "Get-Account-Balance",
+                "account": "Get-Customer-Details",
             },
             "account, API, voice",
         ),
@@ -382,7 +384,7 @@ async def test_reauth_wrong_account(
         ("Get-Token", "error_wrong_password.json", "invalid_auth"),
         ("Get-Token", aiohttp.ClientError(), "cannot_connect"),
         ("Get-Webhooks", "error_access_refused_api.json", "insufficient_access"),
-        ("Get-Customer-Details", "error_generic.json", "unknown"),
+        ("Get-Customer-Details", "error_generic.json", "insufficient_access"),
     ],
 )
 async def test_reauth_errors_then_recovers(

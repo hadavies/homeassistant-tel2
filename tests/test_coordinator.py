@@ -120,10 +120,11 @@ async def test_coordinator_settings(
     assert coordinator.always_update is False
 
 
-async def test_first_refresh_builds_account_state(
+async def test_second_refresh_builds_the_full_account_state(
     hass: HomeAssistant, entry: MockConfigEntry, coordinator: Tel2AccountCoordinator
 ) -> None:
     await first_refresh(hass, entry, coordinator)
+    await coordinator.async_refresh()
 
     assert coordinator.data == AccountState(
         details=CustomerDetails(
@@ -177,11 +178,11 @@ async def test_first_refresh_creates_account_device(
     assert coordinator.account_device_id == device.id
     assert device.manufacturer == "Tel2"
     assert device.name == "Example Ltd"
-    assert device.model == "Example business voice plan"
+    assert device.model == "Account"
     assert device.entry_type is dr.DeviceEntryType.SERVICE
 
 
-async def test_account_device_without_plan_has_no_model(
+async def test_account_device_model_does_not_depend_on_the_plan(
     hass: HomeAssistant,
     entry: MockConfigEntry,
     coordinator: Tel2AccountCoordinator,
@@ -193,7 +194,7 @@ async def test_account_device_without_plan_has_no_model(
 
     device = number_device(hass, entry, ACCOUNT_CODE)
     assert device is not None
-    assert device.model is None
+    assert device.model == "Account"
     assert coordinator.data.plan is None
 
 
@@ -586,6 +587,7 @@ async def test_unchanged_refresh_does_not_notify_listeners(
     fake_tel2: FakeTel2Api,
 ) -> None:
     await first_refresh(hass, entry, coordinator)
+    await coordinator.async_refresh()
     calls: list[None] = []
     unsubscribe = coordinator.async_add_listener(lambda: calls.append(None))
 
@@ -619,3 +621,31 @@ async def test_refresh_listeners_follow_every_successful_refresh(
     fake_tel2.respond("Get-Account-Balance", "get_account_balance.json")
     await coordinator.async_refresh()
     assert len(calls) == 1
+
+
+async def test_first_refresh_skips_the_balance_and_reuses_setup_details(
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    coordinator: Tel2AccountCoordinator,
+    fake_tel2: FakeTel2Api,
+) -> None:
+    await first_refresh(hass, entry, coordinator)
+
+    assert coordinator.data.balance is None
+    assert fake_tel2.call_count("Get-Account-Balance") == 0
+    assert fake_tel2.call_count("Get-Customer-Details") == 1
+
+
+async def test_refreshes_after_the_first_fetch_the_balance(
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    coordinator: Tel2AccountCoordinator,
+    fake_tel2: FakeTel2Api,
+) -> None:
+    await first_refresh(hass, entry, coordinator)
+
+    await coordinator.async_refresh()
+
+    assert coordinator.data.balance is not None
+    assert fake_tel2.call_count("Get-Customer-Details") == 2
+    assert [r.action for r in fake_tel2.requests][-1] != "Get-Customer-Details"

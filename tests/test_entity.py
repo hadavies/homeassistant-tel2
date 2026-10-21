@@ -147,8 +147,7 @@ async def test_account_entity_belongs_to_account_device(
     assert device.identifiers == {(DOMAIN, ACCOUNT_CODE)}
     assert device.manufacturer == MANUFACTURER
     assert device.entry_type is dr.DeviceEntryType.SERVICE
-    assert data.account.data.plan is not None
-    assert device.model == data.account.data.plan.description
+    assert device.model == "Account"
     state = hass.states.get(registry_entry.entity_id)
     assert state is not None
     assert state.state == data.account.data.details.status
@@ -213,6 +212,26 @@ async def test_line_device_name_falls_back_to_number(
     device = number_device(hass, entry, LINE_3)
     assert device is not None
     assert device.name == "+441632960003"
+
+
+@pytest.mark.parametrize("line_name", ["Example Ltd", " example ltd "])
+async def test_line_named_like_the_account_is_named_after_its_number(
+    hass: HomeAssistant, fake_tel2: FakeTel2Api, line_name: str
+) -> None:
+    entry = await async_setup_integration(hass, fake_tel2)
+    body = copy.deepcopy(load_fixture("get_numbers_number_added.json"))
+    for row in body["Data"]:
+        if row["ServiceName"] == "01632960003":
+            row["Alias"] = row["Parameter_4"] = line_name
+    fake_tel2.respond("Get-Numbers", body)
+    fake_tel2.respond("Get-Line-Names", NO_DATA)
+
+    await refresh_account(hass, entry)
+
+    device = number_device(hass, entry, LINE_3)
+    assert device is not None
+    assert device.name == "+441632960003"
+    assert device.model == "Phone number"
 
 
 async def test_existing_numbers_are_not_added_twice(

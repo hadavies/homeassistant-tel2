@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import AsyncGenerator
 import json
 import logging
+import re
 from typing import Any
 
 import aiohttp
@@ -651,3 +652,35 @@ async def test_constructor_rejects_unsafe_arguments(
 
     with pytest.raises(ValueError, match=match):
         Tel2Client(session, **arguments)
+
+
+@pytest.mark.parametrize(
+    ("response", "expected"),
+    [
+        (RawResponse("<html>Bad gateway</html>", status=502), "HTTP 502 without JSON"),
+        (
+            {"status": "ok", "webhooks": [{"url": "https://example.test/hook"}]},
+            "unexpected response (HTTP 200, object with keys status, webhooks)",
+        ),
+        (["not", "an", "object"], "unexpected response (HTTP 200, list of 3)"),
+        (RawResponse(json.dumps("hello")), "unexpected response (HTTP 200, str)"),
+    ],
+    ids=["html", "object-without-result", "list", "string"],
+)
+async def test_unexpected_responses_log_their_shape_without_values(
+    client: Tel2Client,
+    fake_tel2: FakeTel2Api,
+    caplog: pytest.LogCaptureFixture,
+    response: FakeResponse,
+    expected: str,
+) -> None:
+    fake_tel2.respond("Get-Webhooks", response)
+    caplog.set_level(logging.DEBUG, logger="custom_components.tel2")
+
+    with pytest.raises(Tel2ConnectionError, match=re.escape(expected)):
+        await client._call("api", "Get-Webhooks")
+
+    assert expected in caplog.text
+    assert "example.test" not in caplog.text
+    assert "Bad gateway" not in caplog.text
+    assert "hello" not in caplog.text

@@ -23,7 +23,7 @@ from custom_components.tel2.models import (
     Tel2Number,
     WebhookRegistration,
 )
-from tests.fake_tel2 import NO_DATA, FakeTel2Api
+from tests.fake_tel2 import NO_DATA, FakeTel2Api, RawResponse
 from tests.fixture_loader import load_fixture
 
 LOGIN = "portal-login-for-tests"
@@ -163,6 +163,29 @@ async def test_account_balance(client: Tel2Client) -> None:
         balance=Decimal("12.34"), available_balance=Decimal("10.00")
     )
     assert isinstance(balance.balance, Decimal)
+
+
+@pytest.mark.parametrize(
+    ("raw", "shown"),
+    [
+        ("0.0000000000", "0.00"),
+        ("12.5000", "12.50"),
+        ("-3.1", "-3.10"),
+        ("1E+1", "10.00"),
+        ("12.3456000000", "12.3456"),
+    ],
+)
+async def test_balance_is_in_plain_notation(
+    client: Tel2Client, fake_tel2: FakeTel2Api, raw: str, shown: str
+) -> None:
+    fake_tel2.respond(
+        "Get-Account-Balance", success({"Balance": raw, "AvailableBalance": raw})
+    )
+
+    balance = await client.async_get_account_balance()
+
+    assert str(balance.balance) == shown
+    assert str(balance.available_balance) == shown
 
 
 async def test_balance_at_the_magnitude_limit_is_a_number(
@@ -787,7 +810,7 @@ async def test_probe_access_all_granted(
 ) -> None:
     assert await client.async_probe_access() == set()
     assert [(r.action, r.context) for r in fake_tel2.requests[1:]] == [
-        ("Get-Account-Balance", "account"),
+        ("Get-Customer-Details", "account"),
         ("Get-Subscriber-Status", "voice"),
         ("Get-Webhooks", "api"),
     ]
@@ -796,7 +819,7 @@ async def test_probe_access_all_granted(
 @pytest.mark.parametrize(
     ("action", "fixture", "context"),
     [
-        ("Get-Account-Balance", "error_access_refused_account.json", "account"),
+        ("Get-Customer-Details", "error_access_refused_account.json", "account"),
         ("Get-Subscriber-Status", "error_access_refused_voice.json", "voice"),
         ("Get-Webhooks", "error_access_refused_api.json", "api"),
     ],
@@ -816,7 +839,7 @@ async def test_probe_access_reports_each_refused_context(
 async def test_probe_access_reports_every_refused_context(
     client: Tel2Client, fake_tel2: FakeTel2Api
 ) -> None:
-    fake_tel2.respond("Get-Account-Balance", "error_access_refused_account.json")
+    fake_tel2.respond("Get-Customer-Details", "error_access_refused_account.json")
     fake_tel2.respond("Get-Subscriber-Status", "error_access_refused_voice.json")
     fake_tel2.respond("Get-Webhooks", "error_access_refused_api.json")
 
@@ -928,3 +951,23 @@ async def test_no_secret_or_personal_field_is_returned(
     assert not strings & secret_values
     assert not dict_keys & forbidden_keys
     assert not any("@" in item for item in strings)
+
+
+async def test_probe_access_ignores_a_broken_call_events_probe(
+    client: Tel2Client, fake_tel2: FakeTel2Api, caplog: pytest.LogCaptureFixture
+) -> None:
+    fake_tel2.respond("Get-Webhooks", RawResponse("<br />Warning", status=200))
+
+    assert await client.async_probe_access() == set()
+    assert "call events may not work" in caplog.text
+    assert "Warning" not in caplog.text.replace("WARNING", "")
+
+
+@pytest.mark.parametrize("action", ["Get-Customer-Details", "Get-Subscriber-Status"])
+async def test_probe_access_still_fails_when_a_core_probe_is_broken(
+    client: Tel2Client, fake_tel2: FakeTel2Api, action: str
+) -> None:
+    fake_tel2.respond(action, RawResponse("<br />Warning", status=200))
+
+    with pytest.raises(Tel2ConnectionError):
+        await client.async_probe_access()

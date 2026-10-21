@@ -19,6 +19,7 @@ from pytest_homeassistant_custom_component.common import (
 from syrupy.assertion import SnapshotAssertion
 
 from custom_components.tel2.const import DOMAIN
+from custom_components.tel2.models import AccountState, CustomerDetails
 from custom_components.tel2.runtime import Tel2RuntimeData
 from custom_components.tel2.sensor import ACCOUNT_SENSORS, BUNDLE_SENSORS
 from tests.fake_tel2 import NO_DATA, FakeTel2Api
@@ -120,7 +121,7 @@ async def test_values_follow_account_refresh(
     await runtime(entry).account.async_refresh()
     await hass.async_block_till_done()
 
-    assert state_of(hass, f"{ACCOUNT_CODE}_balance") == "-1.5"
+    assert state_of(hass, f"{ACCOUNT_CODE}_balance") == "-1.50"
     assert state_of(hass, f"{ACCOUNT_CODE}_available_balance") == "3.21"
 
 
@@ -209,3 +210,17 @@ async def test_plan_unknown_when_alias_and_description_are_blank(
 def test_sensor_descriptions_are_immutable(description: object) -> None:
     with pytest.raises(FrozenInstanceError):
         description.key = "changed"  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize("key", ["balance", "available_balance"])
+def test_balance_sensors_are_unknown_until_the_balance_arrives(key: str) -> None:
+    description = next(d for d in ACCOUNT_SENSORS if d.key == key)
+    state = AccountState(
+        details=CustomerDetails("00000000", "Example", None, "Active"),
+        balance=None,
+        plan=None,
+        numbers={},
+        bundles={},
+    )
+
+    assert description.value_fn(state) is None

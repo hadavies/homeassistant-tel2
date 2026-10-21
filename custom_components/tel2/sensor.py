@@ -46,7 +46,7 @@ ACCOUNT_SENSORS: tuple[Tel2AccountSensorDescription, ...] = (
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=TEL2_CURRENCY,
         suggested_display_precision=2,
-        value_fn=lambda state: state.balance.balance,
+        value_fn=lambda state: state.balance.balance if state.balance else None,
     ),
     Tel2AccountSensorDescription(
         key="available_balance",
@@ -55,7 +55,9 @@ ACCOUNT_SENSORS: tuple[Tel2AccountSensorDescription, ...] = (
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=TEL2_CURRENCY,
         suggested_display_precision=2,
-        value_fn=lambda state: state.balance.available_balance,
+        value_fn=lambda state: (
+            state.balance.available_balance if state.balance else None
+        ),
     ),
     Tel2AccountSensorDescription(
         key="plan",

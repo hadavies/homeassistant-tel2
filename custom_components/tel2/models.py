@@ -59,7 +59,7 @@ class AccountState:
     """Account-level state from the account coordinator."""
 
     details: CustomerDetails
-    balance: AccountBalance
+    balance: AccountBalance | None
     plan: PlanSummary | None
     numbers: dict[str, Tel2Number]
     bundles: dict[str, BundleUsage]

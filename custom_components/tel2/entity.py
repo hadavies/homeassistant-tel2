@@ -10,10 +10,17 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MANUFACTURER
-from .coordinator import Tel2AccountCoordinator, Tel2LinesCoordinator
+from .coordinator import (
+    ACCOUNT_MODEL,
+    Tel2AccountCoordinator,
+    Tel2LinesCoordinator,
+    account_name,
+)
 from .models import Tel2Number
 from .numbering import display_number
 from .runtime import Tel2ConfigEntry
+
+NUMBER_MODEL = "Phone number"
 
 
 class Tel2AccountEntity(CoordinatorEntity[Tel2AccountCoordinator]):
@@ -28,12 +35,11 @@ class Tel2AccountEntity(CoordinatorEntity[Tel2AccountCoordinator]):
         super().__init__(coordinator)
         self.entity_description = description
         account_code = coordinator.data.details.account_code
-        plan = coordinator.data.plan
         self._attr_unique_id = f"{account_code}_{description.key}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, account_code)},
             manufacturer=MANUFACTURER,
-            model=(plan.description or None) if plan else None,
+            model=ACCOUNT_MODEL,
             entry_type=DeviceEntryType.SERVICE,
         )
 
@@ -65,7 +71,8 @@ class Tel2LineEntity[CoordinatorT: Tel2AccountCoordinator | Tel2LinesCoordinator
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, number.canonical)},
             manufacturer=MANUFACTURER,
-            name=number.name or display_number(number.canonical),
+            name=_line_device_name(number, account_name(self._account.data.details)),
+            model=NUMBER_MODEL,
             via_device_id=self._account.account_device_id,
         )
 
@@ -134,3 +141,10 @@ def async_add_line_entities(
             dr.EVENT_DEVICE_REGISTRY_UPDATED, _forget_removed_device
         )
     )
+
+
+def _line_device_name(number: Tel2Number, account: str) -> str:
+    # Tel2 can name a line after the account, which would give two devices the same name.
+    if number.name and number.name.strip().casefold() != account.strip().casefold():
+        return number.name
+    return display_number(number.canonical)

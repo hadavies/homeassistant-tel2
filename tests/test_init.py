@@ -100,9 +100,9 @@ async def test_account_refreshes_before_lines(
     await async_setup_integration(hass, fake_tel2)
 
     actions = [request.action for request in fake_tel2.requests]
-    last_account = max(i for i, a in enumerate(actions) if a == "Get-Numbers")
+    first_account = min(i for i, a in enumerate(actions) if a == "Get-Numbers")
     first_lines = min(i for i, a in enumerate(actions) if a == "Get-All-Pref-Summary")
-    assert last_account < first_lines
+    assert first_account < first_lines
 
 
 async def test_all_platforms_load(hass: HomeAssistant, fake_tel2: FakeTel2Api) -> None:
@@ -278,3 +278,26 @@ async def test_device_removal_refused_for_a_device_without_tel2_identifiers(
     )
 
     assert not await async_remove_config_entry_device(hass, entry, foreign)
+
+
+async def test_setup_does_not_wait_for_the_balance(
+    hass: HomeAssistant, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond("Get-Account-Balance", aiohttp.ClientError("slow"))
+
+    entry = await async_setup_integration(hass, fake_tel2)
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert fake_tel2.call_count("Get-Account-Balance") == 1
+
+
+async def test_balance_fills_in_after_setup(
+    hass: HomeAssistant, fake_tel2: FakeTel2Api
+) -> None:
+    entry = await async_setup_integration(hass, fake_tel2)
+
+    actions = [r.action for r in fake_tel2.requests]
+    assert actions.index("Get-Account-Balance") > actions.index("Get-All-Pref-Summary")
+    balance = runtime(entry).account.data.balance
+    assert balance is not None
+    assert str(balance.balance) == "12.34"
