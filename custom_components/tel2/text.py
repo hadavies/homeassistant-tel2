@@ -41,7 +41,6 @@ def _has_dialling_prefix(raw: str) -> bool:
 
 def tel2_destination(raw: str) -> str:
     """Return a valid destination as Tel2 stores it: UK national, else 00 + digits."""
-    # Provisional until the live capture confirms the format Tel2 stores.
     digits = canonical_number(raw)
     if digits.startswith(TEL2_COUNTRY_CODE):
         return "0" + digits.removeprefix(TEL2_COUNTRY_CODE)

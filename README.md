@@ -15,7 +15,7 @@ This is an unofficial integration. It isn't made, supported or endorsed by Tel2,
 
 Voicemail isn't covered yet. SMS, call history and billing changes are out of scope.
 
-This is a beta. Call recording and the forward destination haven't been checked against a live account yet, so please raise an issue if either doesn't behave.
+This is a beta. Call recording hasn't been checked against a live account yet, so please raise an issue if it doesn't behave.
 
 ## Before you start
 
