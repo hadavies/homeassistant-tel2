@@ -1,6 +1,14 @@
 # Tel2 for Home Assistant
 
-A Home Assistant integration for [Tel2](https://www.tel2.co.uk) VoIP accounts.
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/docs/faq/custom_repositories)
+[![Release](https://img.shields.io/github/v/release/hadavies/homeassistant-tel2?include_prereleases)](https://github.com/hadavies/homeassistant-tel2/releases)
+[![CI](https://github.com/hadavies/homeassistant-tel2/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hadavies/homeassistant-tel2/actions/workflows/ci.yml)
+[![Licence](https://img.shields.io/github/license/hadavies/homeassistant-tel2)](LICENSE)
+
+A Home Assistant integration for [Tel2](https://www.tel2.co.uk) VoIP accounts. See your balance and bundle minutes, switch do not disturb, forwarding and call recording per number, and react to calls as they happen.
+
+[![Open the Tel2 repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=hadavies&repository=homeassistant-tel2&category=integration)
+[![Add the Tel2 integration](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=tel2)
 
 This is an unofficial integration. It isn't made, supported or endorsed by Tel2, so please raise problems here rather than with Tel2 support.
 
@@ -15,7 +23,7 @@ This is an unofficial integration. It isn't made, supported or endorsed by Tel2,
 
 Voicemail isn't covered yet. SMS, call history and billing changes are out of scope.
 
-This is a beta. Call recording hasn't been checked against a live account yet, so please raise an issue if it doesn't behave.
+This is a beta, it's been tested on one live account so far. Please raise an issue if anything doesn't behave.
 
 ## Before you start
 
@@ -39,7 +47,7 @@ It needs Full access because it reads your balance and changes line settings, an
 
 ### HACS
 
-It isn't in the HACS default store yet, so add it as a custom repository first.
+It isn't in the HACS default store yet, so it goes in as a custom repository. The Open in HACS button above does steps 1 and 2 for you.
 
 1. In HACS, open the three-dot menu and pick Custom repositories.
 2. Add `https://github.com/hadavies/homeassistant-tel2` with the type Integration.
@@ -54,10 +62,10 @@ It isn't in the HACS default store yet, so add it as a custom repository first.
 
 ## Setting it up
 
-1. Go to Settings > Devices & services > Add integration and pick Tel2.
+1. Go to Settings > Devices & services > Add integration and pick Tel2, or use the Add integration button above.
 2. Enter the portal login and password you made above.
 
-You get an account device named after your Tel2 account, and a device for each number. Number devices are named after the line name in Tel2, or the number itself if the line has no name.
+You get an account device named after your Tel2 account, and a device for each number. Number devices are named after the line name in Tel2, or the number itself if the line has no name or shares the account's name.
 
 Numbers added to or removed from your Tel2 account are picked up at the next account refresh, no restart needed.
 

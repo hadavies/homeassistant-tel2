@@ -32,8 +32,6 @@ jobs:
     permissions:
       contents: read
     steps:
-      # description and topics until the repo settings are applied, images until the README screenshot lands.
       - uses: hacs/action@main
         with:
           category: integration
-          ignore: description topics images
