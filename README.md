@@ -23,7 +23,7 @@ This is an unofficial integration. It isn't made, supported or endorsed by Tel2,
 
 Voicemail isn't covered yet. SMS, call history and billing changes are out of scope.
 
-This is a beta, it's been tested on one live account so far. Please raise an issue if anything doesn't behave.
+It's been tested on one live account so far, please raise an issue if anything doesn't behave.
 
 ## Before you start
 
@@ -51,7 +51,7 @@ It isn't in the HACS default store yet, so it goes in as a custom repository. Th
 
 1. In HACS, open the three-dot menu and pick Custom repositories.
 2. Add `https://github.com/hadavies/homeassistant-tel2` with the type Integration.
-3. Search HACS for Tel2 and download it. While Tel2 is in beta there's only a pre-release, so pick the latest `v0.1.0b` release from the version list in the download dialog.
+3. Search HACS for Tel2 and download it.
 4. Restart Home Assistant.
 
 ### Manually
