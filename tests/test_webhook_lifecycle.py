@@ -32,7 +32,7 @@ from custom_components.tel2.const import (
 )
 from custom_components.tel2.runtime import Tel2RuntimeData
 from custom_components.tel2.webhook import SECRET_HEADER, Tel2CallEventManager
-from tests.fake_tel2 import NO_DATA, FakeTel2Api
+from tests.fake_tel2 import NO_DATA, FakeTel2Api, RawResponse
 from tests.fixture_loader import load_fixture
 from tests.helpers import (
     ACCOUNT_CODE,
@@ -55,6 +55,7 @@ WEBHOOK_ENTRY_DATA = {
     CONF_WEBHOOK_ID: WEBHOOK_ID,
     CONF_WEBHOOK_SECRET: WEBHOOK_SECRET,
 }
+BROKEN_LISTING = RawResponse("<br />Warning")
 
 
 @pytest.fixture(autouse=True)
@@ -368,3 +369,76 @@ async def test_removal_without_a_registration_calls_nothing(
     await hass.async_block_till_done()
 
     assert fake_tel2.call_count("Delete-Webhook") == 0
+
+
+async def test_call_is_unavailable_until_tel2_lists_the_registration(
+    hass: HomeAssistant, fake_tel2: FakeTel2Api
+) -> None:
+    hass.config.external_url = EXTERNAL_URL
+    fake_tel2.respond("Get-Webhooks", BROKEN_LISTING)
+    entry = await async_setup_integration(
+        hass, fake_tel2, entry_data=WEBHOOK_ENTRY_DATA
+    )
+    manager = runtime(entry).call_events
+    assert isinstance(manager, Tel2CallEventManager)
+    await manager.async_reconcile()
+    await hass.async_block_till_done()
+
+    assert manager.available is True
+    assert manager.status.registered_on_tel2 is False
+    assert call_state(hass).state == STATE_UNAVAILABLE
+
+    fake_tel2.respond("Get-Webhooks", ours(REGISTERED_URL))
+    await manager.async_reconcile()
+    await hass.async_block_till_done()
+
+    assert manager.status.registered_on_tel2 is True
+    assert call_state(hass).state == STATE_UNKNOWN
+
+
+async def test_call_is_available_with_a_stored_registration_tel2_cannot_list(
+    hass: HomeAssistant, fake_tel2: FakeTel2Api
+) -> None:
+    hass.config.external_url = EXTERNAL_URL
+    fake_tel2.respond("Get-Webhooks", BROKEN_LISTING)
+
+    entry = await async_setup_integration(
+        hass,
+        fake_tel2,
+        entry_data={**WEBHOOK_ENTRY_DATA, CONF_TEL2_WEBHOOK_ID: "7"},
+    )
+
+    assert fake_tel2.call_count("Get-Webhooks") >= 1
+    manager = runtime(entry).call_events
+    assert isinstance(manager, Tel2CallEventManager)
+    assert manager.status.registered_on_tel2 is True
+    assert call_state(hass).state == STATE_UNKNOWN
+
+
+async def test_signed_call_event_proves_the_registration_and_is_delivered(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    hass_client_no_auth: ClientSessionGenerator,
+) -> None:
+    hass.config.external_url = EXTERNAL_URL
+    fake_tel2.respond("Get-Webhooks", BROKEN_LISTING)
+    entry = await async_setup_integration(
+        hass, fake_tel2, entry_data=WEBHOOK_ENTRY_DATA
+    )
+    assert call_state(hass).state == STATE_UNAVAILABLE
+
+    client = await hass_client_no_auth()
+    response = await client.post(
+        WEBHOOK_PATH,
+        json=load_fixture("webhook_inbound_answered.json"),
+        headers={SECRET_HEADER: WEBHOOK_SECRET},
+    )
+    assert response.status == 200
+    await hass.async_block_till_done()
+
+    manager = runtime(entry).call_events
+    assert isinstance(manager, Tel2CallEventManager)
+    assert manager.status.registered_on_tel2 is True
+    fired = call_state(hass)
+    assert dt_util.parse_datetime(fired.state) is not None
+    assert fired.attributes["event_type"] == "answered"

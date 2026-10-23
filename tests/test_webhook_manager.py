@@ -11,6 +11,7 @@ from typing import Any, get_type_hints
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
+from freezegun.api import FrozenDateTimeFactory
 from hass_nabucasa import CloudError
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -36,13 +37,14 @@ from custom_components.tel2.const import (
 from custom_components.tel2.coordinator import Tel2AccountCoordinator
 from custom_components.tel2.runtime import Tel2RuntimeData
 from custom_components.tel2.webhook import (
+    ADD_RETRY_WINDOW,
     CallEventStatus,
     Tel2CallEventManager,
     async_delete_stale_registration,
     async_remove_registration,
     signal_call_event_availability,
 )
-from tests.fake_tel2 import NO_DATA, FakeTel2Api
+from tests.fake_tel2 import NO_DATA, FakeTel2Api, RawResponse
 from tests.fixture_loader import TEST_ENTRY_ID
 from tests.helpers import DEFAULT_ENTRY_DATA
 
@@ -1070,18 +1072,172 @@ async def test_availability_signal_is_sent_only_when_it_changes(
     await manager.async_reconcile()
     await manager.async_reconcile()
     await hass.async_block_till_done()
-    assert (manager.available, len(signals)) == (True, 1)
+    assert (manager.available, manager.registered, len(signals)) == (True, True, 2)
 
     hass.config.external_url = None
     await manager.async_reconcile()
     await hass.async_block_till_done()
-    assert (manager.available, len(signals)) == (False, 2)
+    assert (manager.available, manager.registered, len(signals)) == (False, True, 3)
 
     hass.config.external_url = EXTERNAL_URL
     await manager.async_reconcile()
     manager.async_unload()
     await hass.async_block_till_done()
-    assert (manager.available, len(signals)) == (False, 4)
+    assert (manager.available, len(signals)) == (False, 5)
+
+
+async def test_stored_registration_counts_as_registered_before_any_listing(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    mock_config_entry_factory: Callable[..., MockConfigEntry],
+) -> None:
+    entry = add_entry(hass, mock_config_entry_factory, tel2_webhook_id="7")
+    client = make_client(hass, entry)
+    manager = Tel2CallEventManager(
+        hass, entry, client, Tel2AccountCoordinator(hass, entry, client)
+    )
+
+    assert manager.registered is True
+    assert manager.status == CallEventStatus("none", True, None)
+
+
+async def test_failed_listing_keeps_a_known_registration(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    cloud: CloudMocks,
+    mock_config_entry_factory: Callable[..., MockConfigEntry],
+) -> None:
+    hass.config.external_url = EXTERNAL_URL
+    fake_tel2.respond("Get-Webhooks", ours(REGISTERED_URL), RawResponse("<br />"))
+    entry = add_entry(
+        hass,
+        mock_config_entry_factory,
+        webhook_id=WEBHOOK_ID,
+        webhook_secret=WEBHOOK_SECRET,
+    )
+    manager = await start_manager(hass, entry)
+    assert manager.registered is True
+    signals: list[None] = []
+    async_dispatcher_connect(
+        hass,
+        signal_call_event_availability(entry.entry_id),
+        lambda: signals.append(None),
+    )
+
+    await manager.async_reconcile()
+    await hass.async_block_till_done()
+
+    assert fake_tel2.call_count("Get-Webhooks") == 2
+    assert manager.registered is True
+    assert signals == []
+
+
+async def test_listing_without_the_registration_clears_it_and_signals(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    cloud: CloudMocks,
+    mock_config_entry_factory: Callable[..., MockConfigEntry],
+) -> None:
+    hass.config.external_url = EXTERNAL_URL
+    fake_tel2.respond("Get-Webhooks", ours(REGISTERED_URL))
+    entry = add_entry(
+        hass,
+        mock_config_entry_factory,
+        webhook_id=WEBHOOK_ID,
+        webhook_secret=WEBHOOK_SECRET,
+        tel2_webhook_id="7",
+    )
+    manager = await start_manager(hass, entry)
+    signals: list[None] = []
+    async_dispatcher_connect(
+        hass,
+        signal_call_event_availability(entry.entry_id),
+        lambda: signals.append(None),
+    )
+
+    fake_tel2.respond("Get-Webhooks", NO_DATA)
+    await manager.async_reconcile()
+    await hass.async_block_till_done()
+
+    assert manager.registered is False
+    assert len(signals) == 1
+
+
+def unlisted_warnings(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
+    return [
+        r
+        for r in caplog.records
+        if r.levelno == logging.WARNING and "does not list it" in r.getMessage()
+    ]
+
+
+async def test_unlisted_add_is_not_repeated_within_the_retry_window(
+    *,
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    cloud: CloudMocks,
+    mock_config_entry_factory: Callable[..., MockConfigEntry],
+    caplog: pytest.LogCaptureFixture,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass.config.external_url = EXTERNAL_URL
+    entry = add_entry(
+        hass,
+        mock_config_entry_factory,
+        webhook_id=WEBHOOK_ID,
+        webhook_secret=WEBHOOK_SECRET,
+    )
+    manager = await start_manager(hass, entry)
+    assert fake_tel2.call_count("Add-Webhook") == 1
+    assert len(unlisted_warnings(caplog)) == 1
+
+    freezer.tick(ADD_RETRY_WINDOW / 2)
+    await manager.async_reconcile()
+
+    assert fake_tel2.call_count("Add-Webhook") == 1
+    assert fake_tel2.call_count("Get-Webhooks") == 3
+    assert manager.registered is False
+    assert len(unlisted_warnings(caplog)) == 1
+
+    freezer.tick(ADD_RETRY_WINDOW / 2)
+    await manager.async_reconcile()
+
+    assert fake_tel2.call_count("Add-Webhook") == 2
+    assert len(unlisted_warnings(caplog)) == 1
+
+    await manager.async_reconcile()
+
+    assert fake_tel2.call_count("Add-Webhook") == 2
+
+
+async def test_unlisted_add_marker_clears_once_tel2_lists_it(
+    hass: HomeAssistant,
+    fake_tel2: FakeTel2Api,
+    cloud: CloudMocks,
+    mock_config_entry_factory: Callable[..., MockConfigEntry],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    hass.config.external_url = EXTERNAL_URL
+    entry = add_entry(
+        hass,
+        mock_config_entry_factory,
+        webhook_id=WEBHOOK_ID,
+        webhook_secret=WEBHOOK_SECRET,
+    )
+    manager = await start_manager(hass, entry)
+
+    fake_tel2.respond("Get-Webhooks", ours(REGISTERED_URL))
+    await manager.async_reconcile()
+
+    assert manager.registered is True
+    assert entry.data[CONF_TEL2_WEBHOOK_ID] == "7"
+    assert fake_tel2.call_count("Add-Webhook") == 1
+
+    fake_tel2.respond("Get-Webhooks", NO_DATA)
+    await manager.async_reconcile()
+
+    assert fake_tel2.call_count("Add-Webhook") == 2
+    assert len(unlisted_warnings(caplog)) == 2
 
 
 def test_runtime_data_type_hints_resolve() -> None:

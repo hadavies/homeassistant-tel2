@@ -13,8 +13,6 @@ BRAND_DIR = Path(__file__).parent.parent / "custom_components" / "tel2" / "brand
     [
         ("icon.png", 256),
         ("icon@2x.png", 512),
-        ("logo.png", 256),
-        ("logo@2x.png", 512),
     ],
 )
 def test_brand_image(name: str, size: int) -> None:

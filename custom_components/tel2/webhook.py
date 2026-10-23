@@ -3,7 +3,7 @@
 import asyncio
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import hmac
 import logging
 import secrets
@@ -46,6 +46,7 @@ UNKNOWN_PARTY: Final = "unknown"
 OTHER_PARTY_MAX_LENGTH: Final = 32
 CALL_ID_MAX_LENGTH: Final = 64
 MAX_DURATION_DIGITS: Final = 9
+ADD_RETRY_WINDOW: Final = timedelta(hours=6)
 _DIRECTIONS: Final[Mapping[str, Literal["inbound", "outbound"]]] = {
     "received": "inbound",
     "dialed": "outbound",
@@ -107,8 +108,9 @@ class Tel2CallEventManager:
         self.account = account
         self.available = False
         self._url_source: UrlSource = "none"
-        self._registered = False
+        self._registered = CONF_TEL2_WEBHOOK_ID in entry.data
         self._last_event_at: datetime | None = None
+        self._add_unlisted_at: datetime | None = None
         self._tel2_failing = False
         self._lock = asyncio.Lock()
         self._unsub_cloud: Callable[[], None] | None = None
@@ -117,6 +119,11 @@ class Tel2CallEventManager:
     def webhook_id(self) -> str:
         """Return the HA webhook ID."""
         return str(self.entry.data[CONF_WEBHOOK_ID])
+
+    @property
+    def registered(self) -> bool:
+        """Return whether Tel2 is known to hold our registration."""
+        return self._registered
 
     @property
     def status(self) -> CallEventStatus:
@@ -195,6 +202,14 @@ class Tel2CallEventManager:
             self.hass, signal_call_event_availability(self.entry.entry_id)
         )
 
+    def _set_registered(self, registered: bool) -> None:
+        if registered == self._registered:
+            return
+        self._registered = registered
+        async_dispatcher_send(
+            self.hass, signal_call_event_availability(self.entry.entry_id)
+        )
+
     @property
     def _issue_id(self) -> str:
         return f"{ISSUE_NO_PUBLIC_URL}_{self.entry.entry_id}"
@@ -249,20 +264,13 @@ class Tel2CallEventManager:
         stored_id = self.entry.data.get(CONF_TEL2_WEBHOOK_ID)
         try:
             existing = _find(await self.client.async_get_webhooks(), stored_id, name)
-            if existing is not None and existing.url == url:
-                tel2_id: str | None = existing.tel2_id
-            elif existing is not None:
-                await self.client.async_add_webhook(spec, edit_id=existing.tel2_id)
-                tel2_id = existing.tel2_id
+            if existing is None:
+                tel2_id = await self._async_add_registration(spec, stored_id)
             else:
-                await self.client.async_add_webhook(spec)
-                added = _find(await self.client.async_get_webhooks(), stored_id, name)
-                tel2_id = None if added is None else added.tel2_id
-                if added is None:
-                    _LOGGER.warning(
-                        "Tel2 accepted the call event registration %s but does not list it; retrying on the next refresh",
-                        name,
-                    )
+                self._add_unlisted_at = None
+                if existing.url != url:
+                    await self.client.async_add_webhook(spec, edit_id=existing.tel2_id)
+                tel2_id = existing.tel2_id
         except (Tel2Error, ValueError) as err:
             if not self._tel2_failing:
                 _LOGGER.warning(
@@ -274,13 +282,35 @@ class Tel2CallEventManager:
         if self._tel2_failing:
             _LOGGER.info("Tel2 call event registration recovered")
         self._tel2_failing = False
-        self._registered = tel2_id is not None
+        self._set_registered(tel2_id is not None)
         if tel2_id is not None and self.entry.data.get(CONF_TEL2_WEBHOOK_ID) != tel2_id:
             _update_data(
                 self.hass,
                 self.entry,
                 {**self.entry.data, CONF_TEL2_WEBHOOK_ID: tel2_id},
             )
+
+    # Tel2 can accept an add without listing it, so re-adding on every refresh
+    # would pile up duplicate registrations.
+    async def _async_add_registration(
+        self, spec: WebhookSpec, stored_id: str | None
+    ) -> str | None:
+        now = dt_util.utcnow()
+        unlisted_at = self._add_unlisted_at
+        if unlisted_at is not None and now - unlisted_at < ADD_RETRY_WINDOW:
+            return None
+        await self.client.async_add_webhook(spec)
+        added = _find(await self.client.async_get_webhooks(), stored_id, spec.name)
+        if added is not None:
+            self._add_unlisted_at = None
+            return added.tel2_id
+        if unlisted_at is None:
+            _LOGGER.warning(
+                "Tel2 accepted the call event registration %s but does not list it; checking again on each refresh",
+                spec.name,
+            )
+        self._add_unlisted_at = now
+        return None
 
     async def _async_cloud_connection_changed(
         self, state: CloudConnectionState
@@ -321,6 +351,8 @@ class Tel2CallEventManager:
         except ValueError as err:
             _LOGGER.debug("Dropped a call event: %s", err)
             return
+        # Before the event is sent, so the entity is available to fire it.
+        self._set_registered(True)
         account: AccountState | None = self.account.data
         if account is None or event.number not in account.numbers:
             _LOGGER.debug("Dropped a call event for a number not on the account")
