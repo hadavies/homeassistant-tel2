@@ -1,0 +1,9 @@
+{
+  "Result": "1",
+  "Status": "Success",
+  "Message": "Method Executed Successfully.",
+  "Data": {
+    "Balance": "10.00",
+    "AvailableBalance": "10.00"
+  }
+}

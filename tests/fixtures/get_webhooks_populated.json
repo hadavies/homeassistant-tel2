@@ -1,0 +1,43 @@
+{
+  "Result": "1",
+  "Status": "Success",
+  "Message": "Method Executed Successfully.",
+  "Data": [
+    {
+      "id": "1",
+      "name": "homeassistant-tel2-tel2_test_entry",
+      "phonenumber": "",
+      "url": "https://example.invalid/api/webhook/example-webhook-id",
+      "secretheader": "X-Tel2-Signature",
+      "secrettoken": "FakeSecretTokenA",
+      "inboundringing": "1",
+      "inboundanswered": "1",
+      "inboundended": "1",
+      "inboundmissed": "1",
+      "outboundringing": "1",
+      "outboundanswered": "1",
+      "outboundended": "1",
+      "outboundunattended": "1",
+      "e164format": "1",
+      "airecording": "0"
+    },
+    {
+      "id": "2",
+      "name": "Other app",
+      "phonenumber": "01632960002",
+      "url": "https://example.invalid/other-app/calls",
+      "secretheader": "X-Example-Header",
+      "secrettoken": "FakeSecretTokenB",
+      "inboundringing": "1",
+      "inboundanswered": "1",
+      "inboundended": "1",
+      "inboundmissed": "1",
+      "outboundringing": "1",
+      "outboundanswered": "1",
+      "outboundended": "1",
+      "outboundunattended": "1",
+      "e164format": "1",
+      "airecording": "0"
+    }
+  ]
+}

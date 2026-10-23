@@ -1,0 +1,18 @@
+set_line_setting:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          filter:
+            - integration: tel2
+    pref:
+      required: true
+      example: do_not_disturb_status
+      selector:
+        text:
+    value:
+      required: true
+      example: "1"
+      selector:
+        text:

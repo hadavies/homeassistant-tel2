@@ -1,0 +1,65 @@
+{
+  "files": [
+    {
+      "file": "get_token.json",
+      "action": "Get-Token",
+      "source": "captured"
+    },
+    {
+      "file": "get_customer_details.json",
+      "action": "Get-Customer-Details",
+      "source": "captured"
+    },
+    {
+      "file": "get_account_balance.json",
+      "action": "Get-Account-Balance",
+      "source": "captured"
+    },
+    {
+      "file": "get_current_plan_summary.json",
+      "action": "Get-Current-Plan-Summary",
+      "source": "captured"
+    },
+    {
+      "file": "get_numbers.json",
+      "action": "Get-Numbers",
+      "source": "captured"
+    },
+    {
+      "file": "get_line_names.json",
+      "action": "Get-Line-Names",
+      "source": "captured"
+    },
+    {
+      "file": "get_subscriber_status.json",
+      "action": "Get-Subscriber-Status",
+      "source": "captured"
+    },
+    {
+      "file": "get_all_pref_summary.json",
+      "action": "Get-All-Pref-Summary",
+      "source": "captured"
+    },
+    {
+      "file": "get_webhooks.json",
+      "action": "Get-Webhooks",
+      "source": "captured"
+    },
+    {
+      "file": "get_line_bundle_usage.json",
+      "action": "Get-Line-Bundle-Usage",
+      "source": "captured",
+      "keyed_by": "line"
+    },
+    {
+      "file": "error_invalid_token.json",
+      "action": "Get-Account-Balance",
+      "source": "captured"
+    },
+    {
+      "file": "error_wrong_password.json",
+      "action": "Get-Token",
+      "source": "captured"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "Result": "1",
+  "Status": "Success",
+  "Message": "Method Executed Successfully.",
+  "Data": [
+    {
+      "ServiceName": "01632960001",
+      "Name": "Line 1"
+    },
+    {
+      "ServiceName": "01632960002",
+      "Name": "Line 2"
+    }
+  ]
+}

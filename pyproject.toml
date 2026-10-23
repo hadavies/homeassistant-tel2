@@ -71,12 +71,13 @@ split-on-trailing-comma = false
 
 [tool.ruff.lint.per-file-ignores]
 "custom_components/__init__.py" = ["D104"]
-"tests/**" = ["D100", "D103", "D104", "S101", "SLF001"]
+"scripts/capture_fixtures.py" = ["T201"]
+"tests/**" = ["D100", "D103", "D104", "S101", "S105", "S106", "SLF001"]
 
 [tool.mypy]
 python_version = "3.14"
 strict = true
-files = ["custom_components/tel2"]
+files = ["custom_components/tel2", "scripts"]
 show_error_codes = true
 warn_unreachable = true
 

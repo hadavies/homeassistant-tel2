@@ -1,0 +1,47 @@
+{
+  "Result": "1",
+  "Status": "Success",
+  "Message": "Method Executed Successfully.",
+  "Data": [
+    {
+      "ServiceType": "CallingPlan",
+      "Alias": "T2CallingPlan419",
+      "BillingDescription": "Free Trial Plan",
+      "Charge": "10.00",
+      "Quantity": "1",
+      "IncludedNumbers": "1",
+      "IncludedChannels": "2",
+      "SetInactiveOn": null
+    },
+    {
+      "ServiceType": "Number",
+      "Alias": "Line 2",
+      "BillingDescription": "Free Trial Line - 60 mins calling to UK",
+      "Charge": "10.00",
+      "Quantity": "1",
+      "IncludedNumbers": "0",
+      "IncludedChannels": "0",
+      "SetInactiveOn": null
+    },
+    {
+      "ServiceType": "NumberBundle",
+      "Alias": "Number00000InclMins",
+      "BillingDescription": "441632960001 - minutes",
+      "Charge": "10.00",
+      "Quantity": "1",
+      "IncludedNumbers": "0",
+      "IncludedChannels": "0",
+      "SetInactiveOn": null
+    },
+    {
+      "ServiceType": "Total",
+      "Alias": "Total",
+      "BillingDescription": "Total",
+      "Charge": "10.00",
+      "Quantity": "-",
+      "IncludedNumbers": "-",
+      "IncludedChannels": "-",
+      "SetInactiveOn": "-"
+    }
+  ]
+}

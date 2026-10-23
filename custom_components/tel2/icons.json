@@ -1,0 +1,104 @@
+{
+  "entity": {
+    "sensor": {
+      "balance": {
+        "default": "mdi:cash"
+      },
+      "available_balance": {
+        "default": "mdi:cash-check"
+      },
+      "plan": {
+        "default": "mdi:card-account-phone"
+      },
+      "account_status": {
+        "default": "mdi:account-check"
+      },
+      "bundle_used": {
+        "default": "mdi:timer-sand"
+      },
+      "bundle_total": {
+        "default": "mdi:timer-outline"
+      }
+    },
+    "binary_sensor": {
+      "api_connected": {
+        "default": "mdi:api",
+        "state": {
+          "off": "mdi:api-off"
+        }
+      },
+      "registered": {
+        "default": "mdi:phone-check",
+        "state": {
+          "off": "mdi:phone-off"
+        }
+      }
+    },
+    "switch": {
+      "do_not_disturb": {
+        "default": "mdi:minus-circle",
+        "state": {
+          "off": "mdi:minus-circle-off"
+        }
+      },
+      "call_forward_always": {
+        "default": "mdi:phone-forward",
+        "state": {
+          "off": "mdi:phone-forward-outline"
+        }
+      },
+      "anonymous_reject": {
+        "default": "mdi:incognito-off",
+        "state": {
+          "off": "mdi:incognito"
+        }
+      },
+      "call_recording": {
+        "default": "mdi:record-rec",
+        "state": {
+          "off": "mdi:record-circle-outline"
+        }
+      }
+    },
+    "text": {
+      "forward_destination": {
+        "default": "mdi:phone-outgoing"
+      }
+    },
+    "button": {
+      "resync_line": {
+        "default": "mdi:phone-sync"
+      },
+      "reboot_phone": {
+        "default": "mdi:phone-refresh"
+      }
+    },
+    "event": {
+      "call": {
+        "default": "mdi:phone",
+        "state_attributes": {
+          "event_type": {
+            "default": "mdi:phone",
+            "state": {
+              "ringing": "mdi:phone-ring",
+              "answered": "mdi:phone-in-talk",
+              "ended": "mdi:phone-hangup",
+              "missed": "mdi:phone-missed",
+              "busy": "mdi:phone-minus",
+              "no_answer": "mdi:phone-clock",
+              "rejected": "mdi:phone-cancel",
+              "invalid": "mdi:phone-remove",
+              "not_available": "mdi:phone-off",
+              "blocked": "mdi:phone-lock"
+            }
+          }
+        }
+      }
+    }
+  },
+  "services": {
+    "set_line_setting": {
+      "service": "mdi:phone-settings"
+    }
+  }
+}
