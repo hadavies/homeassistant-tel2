@@ -48,12 +48,13 @@ class Tel2CallEventEntity(Tel2LineEntity[Tel2AccountCoordinator], EventEntity):
 
     @property
     def available(self) -> bool:
-        """Return whether call events are enabled and can reach Home Assistant."""
+        """Return whether call events are enabled, reachable and registered on Tel2."""
         # Webhooks arrive whatever the polling does, so a failed refresh is ignored.
         manager = self._entry.runtime_data.call_events
         return (
             manager is not None
             and manager.available
+            and manager.registered
             and self.canonical in self._account.data.numbers
         )
 

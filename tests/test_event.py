@@ -27,7 +27,8 @@ from custom_components.tel2.runtime import Tel2RuntimeData
 from custom_components.tel2.webhook import Tel2CallEventManager, signal_call_event
 from tests.fake_tel2 import FakeTel2Api
 from tests.helpers import ACCOUNT_CODE, LINE_1, LINE_2, async_setup_integration
-from tests.test_webhook_manager import EXTERNAL_URL
+from tests.test_webhook_lifecycle import WEBHOOK_ENTRY_DATA
+from tests.test_webhook_manager import EXTERNAL_URL, REGISTERED_URL, ours
 
 CALL_1 = f"{ACCOUNT_CODE}_{LINE_1}_call"
 CALL_2 = f"{ACCOUNT_CODE}_{LINE_2}_call"
@@ -65,10 +66,15 @@ async def setup_without_manager(
 
 
 async def inject_manager(
-    hass: HomeAssistant, entry: MockConfigEntry, *, available: bool = True
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    *,
+    available: bool = True,
+    registered: bool = True,
 ) -> MagicMock:
     manager = create_autospec(Tel2CallEventManager, instance=True)
     manager.available = available
+    manager.registered = registered
     data = runtime(entry)
     data.call_events = manager
     data.account.async_update_listeners()
@@ -233,6 +239,21 @@ async def test_availability_follows_the_manager(
     assert state_of(hass, CALL_1).state == STATE_UNKNOWN
 
 
+async def test_unavailable_until_the_registration_is_on_tel2(
+    hass: HomeAssistant, fake_tel2: FakeTel2Api
+) -> None:
+    entry = await setup_without_manager(hass, fake_tel2)
+    manager = await inject_manager(hass, entry, registered=False)
+
+    assert state_of(hass, CALL_1).state == STATE_UNAVAILABLE
+
+    manager.registered = True
+    runtime(entry).account.async_update_listeners()
+    await hass.async_block_till_done()
+
+    assert state_of(hass, CALL_1).state == STATE_UNKNOWN
+
+
 async def test_unavailable_once_the_number_leaves_the_account(
     hass: HomeAssistant, fake_tel2: FakeTel2Api
 ) -> None:
@@ -263,7 +284,10 @@ async def test_withheld_digits_are_not_shown_as_a_number(
 async def test_manager_availability_change_updates_the_entity(
     hass: HomeAssistant, fake_tel2: FakeTel2Api
 ) -> None:
-    entry = await async_setup_integration(hass, fake_tel2)
+    fake_tel2.respond("Get-Webhooks", ours(REGISTERED_URL))
+    entry = await async_setup_integration(
+        hass, fake_tel2, entry_data=WEBHOOK_ENTRY_DATA
+    )
     manager = runtime(entry).call_events
     assert isinstance(manager, Tel2CallEventManager)
     assert state_of(hass, CALL_1).state == STATE_UNAVAILABLE

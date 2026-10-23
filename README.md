@@ -111,7 +111,7 @@ Changes apply straight away, no restart needed.
 - Forward all calls won't turn on until a forward destination is set.
 - The forward destination has to start with 0 or +, e.g. `07700 900123` or `+1 202 555 0147`.
 - Resync line pushes the current settings to the phone, and both buttons need a phone registered on the line.
-- Call is unavailable while call events are off or Tel2 can't reach Home Assistant, see [Call events](#call-events).
+- Call is unavailable while call events are off, Tel2 can't reach Home Assistant, or Tel2 hasn't confirmed the registration yet, see [Call events](#call-events).
 - If Tel2 can't be reached, the entities go unavailable and come back by themselves once it can. API connected turns off instead, and Call keeps receiving events.
 
 ### Call event types
@@ -156,6 +156,8 @@ Tel2 sends call events straight to Home Assistant, so Tel2 has to be able to rea
 Once Home Assistant is reachable the repair issue clears by itself within about 15 minutes, or reload the integration to pick it up straight away.
 
 The integration registers itself with Tel2 under the name `homeassistant-tel2-` followed by a long ID. You can see it in the webhooks list in the API section of the Tel2 portal. If it goes missing, it's added again at the next account refresh.
+
+NOTE: call events rely on Tel2's webhook API, which isn't answering properly at the moment. Until it does, Call stays unavailable and a warning in the log says the registration couldn't be made. It picks up by itself once Tel2's side is working again, there's nothing to update.
 
 Each event carries a secret only your Home Assistant knows, anything without it is dropped. Events for numbers that aren't on your account are dropped too.
 
@@ -231,6 +233,7 @@ The login works but its access level is too low. The message names the parts it 
 
 - Check Settings > System > Repairs for "Call events need Home Assistant on the internet".
 - Check Call events is turned on in the integration's options.
+- Check the log for "Could not register Tel2 call events", that's Tel2's webhook API not answering, see the note under [Call events](#call-events).
 - If you use an external URL, check it starts with https and loads from outside your network, e.g. from your phone on mobile data.
 - If you're behind a reverse proxy, it needs to let POST requests to `/api/webhook/` through.
 - In the Tel2 portal, check the webhooks list in the API section has a registration called `homeassistant-tel2-...`.
