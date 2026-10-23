@@ -262,6 +262,71 @@ async def test_transport_failures_raise_connection_error(
         await client._call("account", "Get-Account-Balance")
 
 
+@pytest.mark.parametrize(
+    "failure",
+    [
+        RawResponse(""),
+        RawResponse("<html>oops</html>"),
+        aiohttp.ServerDisconnectedError(),
+    ],
+    ids=["empty-body", "html", "disconnected"],
+)
+async def test_reads_retry_once_after_a_transient_failure(
+    client: Tel2Client, fake_tel2: FakeTel2Api, failure: FakeResponse
+) -> None:
+    fake_tel2.respond("Get-Webhooks", failure, "get_webhooks_populated.json")
+
+    webhooks = await client.async_get_webhooks()
+
+    assert webhooks
+    assert fake_tel2.call_count("Get-Webhooks") == 2
+
+
+async def test_reads_give_up_after_the_retry_fails(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond("Get-Webhooks", RawResponse(""))
+
+    with pytest.raises(Tel2ConnectionError):
+        await client.async_get_webhooks()
+    assert fake_tel2.call_count("Get-Webhooks") == 2
+
+
+async def test_get_token_retries_once_after_a_transient_failure(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond("Get-Token", RawResponse(""), token_response("fresh-token"))
+
+    await client.async_authenticate()
+
+    assert fake_tel2.call_count("Get-Token") == 2
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [RawResponse(""), aiohttp.ServerDisconnectedError()],
+    ids=["empty-body", "disconnected"],
+)
+async def test_writes_are_not_retried(
+    client: Tel2Client, fake_tel2: FakeTel2Api, failure: FakeResponse
+) -> None:
+    fake_tel2.respond("Add-Webhook", failure, "add_webhook.json")
+
+    with pytest.raises(Tel2ConnectionError):
+        await client._call_write("api", "Add-Webhook", {"name": "test"})
+    assert fake_tel2.call_count("Add-Webhook") == 1
+
+
+async def test_timeouts_are_not_retried(
+    client: Tel2Client, fake_tel2: FakeTel2Api
+) -> None:
+    fake_tel2.respond("Get-Webhooks", TimeoutError(), "get_webhooks_populated.json")
+
+    with pytest.raises(Tel2ConnectionError):
+        await client.async_get_webhooks()
+    assert fake_tel2.call_count("Get-Webhooks") == 1
+
+
 async def test_get_token_transport_failure_raises_connection_error(
     client: Tel2Client, fake_tel2: FakeTel2Api
 ) -> None:
@@ -684,3 +749,44 @@ async def test_unexpected_responses_log_their_shape_without_values(
     assert "example.test" not in caplog.text
     assert "Bad gateway" not in caplog.text
     assert "hello" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ("", "without JSON (empty body)"),
+        (" \r\n", "without JSON (3 bytes of whitespace)"),
+        ("<html>Bad gateway</html>", "without JSON (24 bytes of HTML)"),
+        (
+            'Warning: Bad gateway\n{"Result": "1"}',
+            "without JSON (36 bytes, text before a JSON object)",
+        ),
+        ("Bad gateway", "without JSON (11 bytes of text)"),
+        ("Bad gateway {oops", "without JSON (17 bytes of text)"),
+        (b"\xff\xfeBad gateway", "without JSON (13 bytes, not UTF-8)"),
+    ],
+    ids=[
+        "empty",
+        "whitespace",
+        "html",
+        "text-then-json",
+        "text",
+        "text-with-brace",
+        "not-utf8",
+    ],
+)
+async def test_non_json_bodies_log_their_kind_without_values(
+    client: Tel2Client,
+    fake_tel2: FakeTel2Api,
+    caplog: pytest.LogCaptureFixture,
+    body: str | bytes,
+    expected: str,
+) -> None:
+    fake_tel2.respond("Get-Webhooks", RawResponse(body))
+    caplog.set_level(logging.DEBUG, logger="custom_components.tel2")
+
+    with pytest.raises(Tel2ConnectionError, match=re.escape(expected)):
+        await client.async_get_webhooks()
+
+    assert expected in caplog.text
+    assert "Bad gateway" not in caplog.text

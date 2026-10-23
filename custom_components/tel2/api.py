@@ -94,6 +94,10 @@ class Tel2ConnectionError(Tel2Error):
     """Tel2 could not be reached or sent an unreadable response."""
 
 
+class _Tel2TransientError(Tel2ConnectionError):
+    """A dropped connection or non-JSON answer, worth one more try for a read."""
+
+
 class Tel2AuthError(Tel2Error):
     """Tel2 rejected the login, password or token."""
 
@@ -366,7 +370,8 @@ class Tel2Client:
     ) -> None:
         """Call a Tel2 write; anything but Result 1 means it was not executed."""
         try:
-            await self._call(context, action, params)
+            # A write that may have been applied is never resent.
+            await self._call(context, action, params, retry=False)
         except Tel2NoData as err:
             raise Tel2ApiError(
                 f"Tel2 {action} was not applied: {err}", context, action
@@ -377,14 +382,16 @@ class Tel2Client:
         context: AccessContext,
         action: str,
         params: dict[str, Any] | None = None,
+        *,
+        retry: bool = True,
     ) -> Any:
         """Call a Tel2 action, renewing the token once if Tel2 refuses it."""
         token = await self._current_token()
         try:
-            return await self._send(context, action, params, token)
+            return await self._send(context, action, params, token, retry=retry)
         except Tel2AuthError:
             token = await self._renew_token(token)
-        return await self._send(context, action, params, token)
+        return await self._send(context, action, params, token, retry=retry)
 
     async def _call_optional(
         self,
@@ -432,6 +439,8 @@ class Tel2Client:
         action: str,
         params: dict[str, Any] | None,
         token: str,
+        *,
+        retry: bool,
     ) -> Any:
         body = {
             "token": token,
@@ -439,9 +448,25 @@ class Tel2Client:
             "context": context,
             "params": params or {},
         }
-        return await self._post(context, action, body)
+        return await self._post(context, action, body, retry=retry)
 
     async def _post(
+        self,
+        context: AccessContext | None,
+        action: str,
+        body: dict[str, Any],
+        *,
+        retry: bool = True,
+    ) -> Any:
+        try:
+            return await self._post_once(context, action, body)
+        except _Tel2TransientError:
+            if not retry:
+                raise
+            _LOGGER.debug("Tel2 %s %s: retrying once", context or "-", action)
+        return await self._post_once(context, action, body)
+
+    async def _post_once(
         self, context: AccessContext | None, action: str, body: dict[str, Any]
     ) -> Any:
         try:
@@ -452,9 +477,12 @@ class Tel2Client:
                 raw = await response.read()
         except (aiohttp.ClientError, TimeoutError) as err:
             _LOGGER.debug("Tel2 %s %s: %s", context or "-", action, type(err).__name__)
-            raise Tel2ConnectionError(
-                f"Tel2 {action} failed: {type(err).__name__}"
-            ) from err
+            error = (
+                _Tel2TransientError
+                if isinstance(err, aiohttp.ServerDisconnectedError)
+                else Tel2ConnectionError
+            )
+            raise error(f"Tel2 {action} failed: {type(err).__name__}") from err
         try:
             data = _parse_envelope(raw, status, context, action)
         except Tel2ConnectionError as err:
@@ -473,8 +501,8 @@ def _parse_envelope(
     try:
         envelope = json.loads(raw)
     except ValueError as err:
-        raise Tel2ConnectionError(
-            f"Tel2 {action} returned HTTP {status} without JSON"
+        raise _Tel2TransientError(
+            f"Tel2 {action} returned HTTP {status} without JSON ({_describe_body(raw)})"
         ) from err
     if not isinstance(envelope, dict) or "Result" not in envelope:
         raise Tel2ConnectionError(
@@ -490,6 +518,29 @@ def _parse_envelope(
     elif is_auth_message(message):
         raise Tel2AuthError(message)
     raise Tel2ApiError(message, context, action)
+
+
+def _describe_body(raw: bytes) -> str:
+    """Describe a non-JSON body without its contents, for logs."""
+    if not raw:
+        return "empty body"
+    try:
+        text = raw.decode().strip()
+    except UnicodeDecodeError:
+        return f"{len(raw)} bytes, not UTF-8"
+    if not text:
+        return f"{len(raw)} bytes of whitespace"
+    if text.startswith("<"):
+        return f"{len(raw)} bytes of HTML"
+    start = text.find("{")
+    if start > 0:
+        try:
+            json.loads(text[start:])
+        except ValueError:
+            pass
+        else:
+            return f"{len(raw)} bytes, text before a JSON object"
+    return f"{len(raw)} bytes of text"
 
 
 def _shape(value: Any) -> str:
