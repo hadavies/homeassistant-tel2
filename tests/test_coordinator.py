@@ -464,14 +464,21 @@ async def test_auth_failure_without_message_has_fallback_text(
 
 
 @pytest.mark.parametrize(
-    "response", [aiohttp.ClientError(), TimeoutError()], ids=["client", "timeout"]
+    ("response", "reason"),
+    [
+        (aiohttp.ClientError(), "Tel2 Get-Account-Balance failed: ClientError"),
+        (TimeoutError(), "Tel2 Get-Account-Balance failed: TimeoutError"),
+    ],
+    ids=["client", "timeout"],
 )
 async def test_connection_error_is_update_failed(
+    *,
     hass: HomeAssistant,
     entry: MockConfigEntry,
     coordinator: Tel2AccountCoordinator,
     fake_tel2: FakeTel2Api,
     response: BaseException,
+    reason: str,
 ) -> None:
     await first_refresh(hass, entry, coordinator)
     fake_tel2.respond("Get-Account-Balance", response)
@@ -483,6 +490,7 @@ async def test_connection_error_is_update_failed(
     assert isinstance(err, UpdateFailed)
     assert err.translation_domain == DOMAIN
     assert err.translation_key == "update_cannot_connect"
+    assert err.translation_placeholders == {"reason": reason}
 
 
 async def test_tel2_error_is_update_failed_with_message(

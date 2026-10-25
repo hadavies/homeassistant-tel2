@@ -186,10 +186,12 @@ def test_no_unexpected_exceptions(strings: Any) -> None:
     [
         ("tel2_rejected", {"message"}),
         ("update_tel2_error", {"message"}),
+        ("update_cannot_connect", {"reason"}),
         *[
             (key, set())
             for key in EXCEPTIONS
-            if key not in {"tel2_rejected", "update_tel2_error"}
+            if key
+            not in {"tel2_rejected", "update_tel2_error", "update_cannot_connect"}
         ],
     ],
 )

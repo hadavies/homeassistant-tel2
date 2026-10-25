@@ -300,7 +300,9 @@ def _update_error(err: BaseException) -> BaseException:
         return ConfigEntryAuthFailed(str(err) or AUTH_FAILED_FALLBACK)
     if isinstance(err, Tel2ConnectionError):
         return UpdateFailed(
-            translation_domain=DOMAIN, translation_key="update_cannot_connect"
+            translation_domain=DOMAIN,
+            translation_key="update_cannot_connect",
+            translation_placeholders={"reason": str(err)},
         )
     if isinstance(err, Tel2Error):
         message = err.message if isinstance(err, Tel2ApiError) else str(err)

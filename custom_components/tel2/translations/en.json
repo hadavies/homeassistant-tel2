@@ -179,7 +179,7 @@
       "message": "Tel2 couldn't reboot the phone. Check Tel2 is reachable and a phone is registered to the line."
     },
     "update_cannot_connect": {
-      "message": "Can't reach Tel2, will try again at the next refresh"
+      "message": "Can't reach Tel2 ({reason}), will try again at the next refresh"
     },
     "update_tel2_error": {
       "message": "Tel2 returned an error: {message}"
