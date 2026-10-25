@@ -35,7 +35,7 @@ from custom_components.tel2.coordinator import (
     Tel2LinesCoordinator,
 )
 from custom_components.tel2.models import LinesState
-from tests.fake_tel2 import NO_DATA, FakeTel2Api
+from tests.fake_tel2 import NO_DATA, FakeTel2Api, RawResponse
 from tests.fixture_loader import load_fixture
 from tests.helpers import async_setup_integration
 
@@ -464,12 +464,22 @@ async def test_unauthorised_function_is_update_failed_not_reauth(
 
 
 @pytest.mark.parametrize(
-    "response", [aiohttp.ClientError(), TimeoutError()], ids=["client", "timeout"]
+    ("response", "reason"),
+    [
+        (aiohttp.ClientError(), "Tel2 Get-All-Pref-Summary failed: ClientError"),
+        (TimeoutError(), "Tel2 Get-All-Pref-Summary failed: TimeoutError"),
+        (
+            RawResponse("<html>Service unavailable</html>"),
+            "Tel2 Get-All-Pref-Summary returned HTTP 200 without JSON (32 bytes of HTML)",
+        ),
+    ],
+    ids=["client", "timeout", "html"],
 )
 async def test_connection_error_is_update_failed(
     loaded: Tel2LinesCoordinator,
     fake_tel2: FakeTel2Api,
-    response: BaseException,
+    response: BaseException | RawResponse,
+    reason: str,
 ) -> None:
     fake_tel2.respond("Get-All-Pref-Summary", response)
 
@@ -480,6 +490,7 @@ async def test_connection_error_is_update_failed(
     assert isinstance(err, UpdateFailed)
     assert err.translation_domain == DOMAIN
     assert err.translation_key == "update_cannot_connect"
+    assert err.translation_placeholders == {"reason": reason}
 
 
 async def test_tel2_error_is_update_failed_with_message(

@@ -1127,7 +1127,7 @@ async def test_failed_listing_keeps_a_known_registration(
     await manager.async_reconcile()
     await hass.async_block_till_done()
 
-    assert fake_tel2.call_count("Get-Webhooks") == 2
+    assert fake_tel2.call_count("Get-Webhooks") == 3
     assert manager.registered is True
     assert signals == []
 
