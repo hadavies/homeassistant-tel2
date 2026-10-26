@@ -1,6 +1,6 @@
 # Tel2 for Home Assistant
 
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/docs/faq/custom_repositories)
+[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://hacs.xyz)
 [![Release](https://img.shields.io/github/v/release/hadavies/homeassistant-tel2?include_prereleases)](https://github.com/hadavies/homeassistant-tel2/releases)
 [![CI](https://github.com/hadavies/homeassistant-tel2/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hadavies/homeassistant-tel2/actions/workflows/ci.yml)
 [![Licence](https://img.shields.io/github/license/hadavies/homeassistant-tel2)](LICENSE)
@@ -47,12 +47,11 @@ It needs Full access because it reads your balance and changes line settings, an
 
 ### HACS
 
-It isn't in the HACS default store yet, so it goes in as a custom repository. The Open in HACS button above does steps 1 and 2 for you.
+It's in the HACS default store, so there's no repository to add. The Open in HACS button above takes you straight to it.
 
-1. In HACS, open the three-dot menu and pick Custom repositories.
-2. Add `https://github.com/hadavies/homeassistant-tel2` with the type Integration.
-3. Search HACS for Tel2 and download it.
-4. Restart Home Assistant.
+1. Search HACS for Tel2 and open it.
+2. Download it.
+3. Restart Home Assistant.
 
 ### Manually
 
